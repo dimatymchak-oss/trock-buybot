@@ -853,10 +853,6 @@ saveDb();
 console.log("✅ Burn history initialized");
 
 return;
-
-  token.burnInitialized = true;
-  saveDb();
-  return;
 }
 
     for (const event of events.reverse()) {
@@ -911,6 +907,12 @@ return;
           burnAmount = normalizeAmount(amountRaw, decimals);
         }
       }
+
+if (!burnAmount || burnAmount <= 0) {
+  remember(key);
+  saveDb();
+  continue;
+}
 
       token.burnedTotal = String(
   Number(Number(token.burnedTotal || 0) + Number(burnAmount || 0)).toFixed(9)
@@ -1355,7 +1357,13 @@ bot.onText(/\/recount_burn/, async msg => {
         item.jetton ||
         "";
 
-      if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
+      if (
+  jettonAddress &&
+  !sameAddress(jettonAddress, token.jettonMaster) &&
+  String(jettonAddress) !== String(token.jettonMaster)
+) {
+  continue;
+}
 
       const decimals = Number(item.jetton?.decimals || 9);
       total = normalizeAmount(item.balance || "0", decimals);
