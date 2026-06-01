@@ -18,8 +18,7 @@ const TONAPI_KEY = String(process.env.TONAPI_KEY || "").trim();
 const TONCENTER_API_KEY = String(process.env.TONCENTER_API_KEY || "").trim();
 const MONITOR_INTERVAL_MS = Number(process.env.MONITOR_INTERVAL_MS || 30000);
 
-const DATA_FILE = path.join(__dirname, "data.json");
-
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, "data.json");
 if (!BOT_TOKEN) throw new Error("BOT_TOKEN missing");
 if (!GROUP_CHAT_ID) throw new Error("GROUP_CHAT_ID missing");
 if (!ADMIN_IDS.length) throw new Error("ADMIN_IDS missing");
