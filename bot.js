@@ -581,7 +581,7 @@ function buyCaption(data) {
   return (
     `🚀 <b>${esc(token.symbol)} Buy!</b>\n\n` +
     `${emojis}\n\n` +
-    `💵 <b>${esc(fmt(tonAmount || 0, 3))} TON</b>${usdAmount ? ` ($${esc(fmt(usdAmount, 2))})` : ""}\n` +
+    `💵 <b>${esc(fmt(tonAmount || 0, 2))} TON</b>${usdAmount ? ` ($${esc(fmt(usdAmount, 2))})` : ""}\n` +
     `↔️ <b>${esc(fmt(data.amount, 2))} ${esc(token.symbol)}</b>\n` +
     `👤 <a href="https://tonviewer.com/${esc(data.recipient)}">${esc(shortAddr(data.recipient))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
@@ -917,6 +917,11 @@ return;
             "";
 
           if (!sameAddress(recipient, token.burnWallet)) continue;
+
+          console.log("BURN MATCH:", {
+  recipient,
+  burnWallet: token.burnWallet
+});
 
           sender =
             payload.sender?.address ||
