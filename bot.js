@@ -698,6 +698,18 @@ async function checkBuys() {
 
       const actions = event.actions || [];
 
+      const rawJson = JSON.stringify(event).toLowerCase();
+
+const tonMatches = rawJson.match(/"ton_attached":\s*(\d+)/g) || [];
+
+for (const m of tonMatches) {
+  const n = Number(m.replace(/\D/g, "")) / 1e9;
+
+  if (n > tonAmount && n < 50) {
+    tonAmount = n;
+  }
+}
+
       let tokenAmount = 0;
       let tonAmount = 0;
       let buyer = "";
@@ -766,6 +778,10 @@ async function checkBuys() {
         }
       }
       
+      if (tonAmount > 0.24 && tonAmount < 0.26) {
+  tonAmount = 0;
+}
+
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
