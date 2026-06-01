@@ -781,27 +781,30 @@ async function checkBuys() {
         continue;
       }
 
-      await refreshDexData();
-
-      console.log("BUY DEBUG:", {
+   console.log("BUY DEBUG:", {
   tokenAmount,
   tonAmount,
   price: token.price,
+  priceNative: token.priceNative,
   tonUsd: token.tonUsd
 });
 
-      if (
+const nativePrice =
+  Number(token.priceNative || 0) ||
+  (
+    Number(token.price || 0) > 0 && Number(token.tonUsd || 0) > 0
+      ? Number(token.price) / Number(token.tonUsd)
+      : 0
+  );
+
+if (
   (!tonAmount || tonAmount <= 0) &&
   tokenAmount > 0 &&
-  Number(token.priceNative || 0) > 0
+  nativePrice > 0
 ) {
-  tonAmount =
-    tokenAmount * Number(token.priceNative);
-
+  tonAmount = tokenAmount * nativePrice;
   tonAmount = Number(tonAmount.toFixed(3));
 }
-
-      await sendPost(
         tradeType,
         tradeType === "sell"
           ? sellCaption({
