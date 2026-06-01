@@ -670,26 +670,25 @@ async function checkBuys() {
     );
 
     const events = res.data?.events || [];
+
     if (!token.buyInitialized) {
-  for (const event of events) {
-    const eventId = event.event_id || event.id || event.hash || "";
-    if (eventId) remember(`buy_event_${eventId}`);
-  }
+      for (const event of events) {
+        const eventId = event.event_id || event.id || event.hash || "";
+        if (eventId) remember(`buy_event_${eventId}`);
+      }
 
-  token.buyInitialized = true;
-  saveDb();
-  return;
-}
-
+      token.buyInitialized = true;
+      saveDb();
+      return;
+    }
 
     for (const event of events.reverse()) {
-   
-    if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
-  const oldEventId = event.event_id || event.id || event.hash || "";
-  remember(`buy_event_${oldEventId}`);
-  saveDb();
-  continue;
-}
+      if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
+        const oldEventId = event.event_id || event.id || event.hash || "";
+        if (oldEventId) remember(`buy_event_${oldEventId}`);
+        saveDb();
+        continue;
+      }
 
       const eventId = event.event_id || event.id || event.hash || "";
       if (!eventId) continue;
@@ -709,20 +708,17 @@ async function checkBuys() {
       for (const action of actions) {
         const type = action.type || "";
         const payload =
-  action.JettonTransfer ||
-  action.FlawedJettonTransfer ||
-  action.TonTransfer ||
-  action.SmartContractExec ||
-  action.payload ||
-  {};
+          action.JettonTransfer ||
+          action.FlawedJettonTransfer ||
+          action.payload ||
+          {};
 
         if (
-  type === "JettonTransfer" ||
-  type === "FlawedJettonTransfer" ||
-  action.JettonTransfer ||
-  action.FlawedJettonTransfer
-) {
-
+          type === "JettonTransfer" ||
+          type === "FlawedJettonTransfer" ||
+          action.JettonTransfer ||
+          action.FlawedJettonTransfer
+        ) {
           const jettonAddress =
             payload.jetton?.address ||
             payload.jetton?.master ||
@@ -730,8 +726,8 @@ async function checkBuys() {
             "";
 
           if (jettonAddress && !sameAddress(jettonAddress, token.jettonMaster)) {
-           continue;
-         }
+            continue;
+          }
 
           const recipient =
             payload.recipient?.address ||
@@ -739,6 +735,7 @@ async function checkBuys() {
             payload.receiver?.address ||
             payload.receiver ||
             "";
+
           const sender =
             payload.sender?.address ||
             payload.sender ||
@@ -750,63 +747,56 @@ async function checkBuys() {
             payload.amount ||
             payload.quantity ||
             "0";
+
           const decimals = Number(payload.jetton?.decimals || 9);
           const amount = normalizeAmount(amountRaw, decimals);
 
           if (amount > 0) {
-  tokenAmount = amount;
+            tokenAmount = amount;
 
-  if (sameAddress(recipient, token.dexPoolAddress)) {
-    tradeType = "sell";
-    seller = sender;
-    buyer = recipient;
-  } else {
-    tradeType = "buy";
-    buyer = recipient;
-  }
+            if (sameAddress(recipient, token.dexPoolAddress)) {
+              tradeType = "sell";
+              seller = sender;
+              buyer = recipient;
+            } else {
+              tradeType = "buy";
+              buyer = recipient;
+            }
+          }
+        }
+      }
 
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
 
       if (tradeType === "sell" && token.sellEnabled === false) {
-  remember(key);
-  saveDb();
-  continue;
-}
+        remember(key);
+        saveDb();
+        continue;
+      }
 
       await refreshDexData();
 
-      if (tokenAmount > 0 && tonAmount > 0 && Number(token.tonUsd || 0) > 0) {
-  const priceUsd = (tonAmount * Number(token.tonUsd)) / tokenAmount;
-  token.price = String(priceUsd.toFixed(10));
-  token.marketCap = String(priceUsd * 100000000);
-  saveDb();
-}
-
-     if (!tonAmount || tonAmount <= 0) {
-  tonAmount = 0;
-}
-
-     await sendPost(
-  tradeType,
-  tradeType === "sell"
-    ? sellCaption({
-        amount: tokenAmount,
-        tonAmount,
-        seller: seller || buyer,
-        hash: txHash,
-        lt: String(Date.now())
-      })
-    : buyCaption({
-        amount: tokenAmount,
-        tonAmount,
-        recipient: buyer,
-        sender: token.dexPoolAddress,
-        hash: txHash,
-        lt: String(Date.now())
-      })
-);
+      await sendPost(
+        tradeType,
+        tradeType === "sell"
+          ? sellCaption({
+              amount: tokenAmount,
+              tonAmount,
+              seller: seller || buyer,
+              hash: txHash,
+              lt: String(Date.now())
+            })
+          : buyCaption({
+              amount: tokenAmount,
+              tonAmount,
+              recipient: buyer,
+              sender: token.dexPoolAddress,
+              hash: txHash,
+              lt: String(Date.now())
+            })
+      );
 
       token.totalBuyPosts += 1;
       remember(key);
