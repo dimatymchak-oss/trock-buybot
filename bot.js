@@ -838,10 +838,21 @@ async function checkBurns() {
     const events = res.data?.events || [];
 
     if (!token.burnInitialized) {
-  for (const event of events) {
-    const eventId = event.event_id || event.id || event.hash || "";
-    if (eventId) remember(`burn_event_${eventId}`);
+
+    for (const event of events) {
+  const eventId = event.event_id || event.id || event.hash || "";
+
+  if (eventId) {
+    remember(`burn_event_${eventId}`);
   }
+}
+
+token.burnInitialized = true;
+saveDb();
+
+console.log("✅ Burn history initialized");
+
+return;
 
   token.burnInitialized = true;
   saveDb();
@@ -1244,6 +1255,145 @@ bot.onText(/\/debugjson/, async msg => {
     await bot.sendMessage(
       msg.chat.id,
       `❌ ${e.response?.status || ""} ${e.message}`
+    );
+  }
+});
+
+bot.onText(/\/recount_rewards/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  if (!token.rewardWallet) {
+    return bot.sendMessage(msg.chat.id, "❌ Reward wallet не задан");
+  }
+
+  try {
+    const headers = {};
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+
+    let total = 0;
+
+    const res = await axios.get(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.rewardWallet)}/events`,
+      {
+        params: { limit: 100 },
+        headers,
+        timeout: 20000
+      }
+    );
+
+    const events = res.data?.events || [];
+
+    for (const event of events) {
+      for (const action of event.actions || []) {
+        if (action.type !== "TonTransfer" && !action.TonTransfer) continue;
+
+        const payload = action.TonTransfer || {};
+        const sender = payload.sender?.address || payload.sender || "";
+
+        if (!sameAddress(sender, token.rewardWallet)) continue;
+
+        const amountRaw = payload.amount || payload.value || "0";
+        const amountTon =
+          Number(amountRaw) > 1000000
+            ? Number(amountRaw) / 1e9
+            : Number(amountRaw);
+
+        total += amountTon;
+      }
+    }
+
+    token.rewardTotalTon = String(total.toFixed(9));
+    saveDb();
+
+    await bot.sendMessage(
+      msg.chat.id,
+      `✅ Пересчитано\n\n👛 Всего выплат: ${fmt(token.rewardTotalTon, 4)} TON`
+    );
+  } catch (e) {
+    await bot.sendMessage(
+      msg.chat.id,
+      `❌ Ошибка пересчёта:\n${e.response?.status || ""} ${e.message}`
+    );
+  }
+});
+
+bot.onText(/\/recount_burn/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  if (!token.burnWallet || !token.jettonMaster) {
+    return bot.sendMessage(msg.chat.id, "❌ Burn wallet или Jetton master не задан");
+  }
+
+  try {
+    const headers = {};
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+
+    let total = 0;
+
+    const res = await axios.get(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.burnWallet)}/events`,
+      {
+        params: { limit: 100 },
+        headers,
+        timeout: 20000
+      }
+    );
+
+    const events = res.data?.events || [];
+
+    for (const event of events) {
+      for (const action of event.actions || []) {
+        const payload =
+          action.JettonTransfer ||
+          action.FlawedJettonTransfer ||
+          {};
+
+        if (!payload) continue;
+
+        const jettonAddress =
+          payload.jetton?.address ||
+          payload.jetton?.master ||
+          payload.jetton ||
+          "";
+
+        if (jettonAddress && !sameAddress(jettonAddress, token.jettonMaster)) continue;
+
+        const recipient =
+          payload.recipient?.address ||
+          payload.recipient ||
+          payload.receiver?.address ||
+          payload.receiver ||
+          "";
+
+        if (!sameAddress(recipient, token.burnWallet)) continue;
+
+        const amountRaw =
+          payload.received_amount ||
+          payload.sent_amount ||
+          payload.amount ||
+          payload.quantity ||
+          "0";
+
+        const decimals = Number(payload.jetton?.decimals || 9);
+        total += normalizeAmount(amountRaw, decimals);
+      }
+    }
+
+    token.burnedTotal = String(total.toFixed(9));
+    saveDb();
+
+    await bot.sendMessage(
+      msg.chat.id,
+      `✅ Burn пересчитан\n\n🔥 Total Burn: ${fmt(token.burnedTotal, 4)} ${token.symbol}`
+    );
+  } catch (e) {
+    await bot.sendMessage(
+      msg.chat.id,
+      `❌ Ошибка пересчёта burn:\n${e.response?.status || ""} ${e.message}`
     );
   }
 });
