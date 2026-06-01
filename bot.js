@@ -805,6 +805,7 @@ if (
   tonAmount = tokenAmount * nativePrice;
   tonAmount = Number(tonAmount.toFixed(3));
 }
+      await sendPost(
         tradeType,
         tradeType === "sell"
           ? sellCaption({
