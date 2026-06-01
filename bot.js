@@ -1403,6 +1403,56 @@ bot.onText(/\/recount_burn/, async msg => {
   }
 });
 
+bot.onText(/\/debugjson/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  try {
+    const headers = {};
+    if (TONAPI_KEY) {
+      headers.Authorization = `Bearer ${TONAPI_KEY}`;
+    }
+
+    const res = await axios.get(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.dexPoolAddress)}/events`,
+      {
+        params: { limit: 1 },
+        headers,
+        timeout: 20000
+      }
+    );
+
+    const event = res.data?.events?.[0];
+
+    if (!event) {
+      return bot.sendMessage(msg.chat.id, "❌ Events not found");
+    }
+
+    const json = JSON.stringify(event, null, 2);
+
+    if (json.length < 4000) {
+      return bot.sendMessage(msg.chat.id, `<pre>${esc(json)}</pre>`, {
+        parse_mode: "HTML"
+      });
+    }
+
+    const chunks = json.match(/[\s\S]{1,3500}/g) || [];
+
+    for (const chunk of chunks) {
+      await bot.sendMessage(msg.chat.id, `<pre>${esc(chunk)}</pre>`, {
+        parse_mode: "HTML"
+      });
+    }
+
+  } catch (e) {
+    bot.sendMessage(
+      msg.chat.id,
+      `❌ DEBUG ERROR\n${e.message}`
+    );
+  }
+});
+
 bot.onText(/\/debugburn/, async msg => {
   if (!isAdmin(msg.from.id)) return;
 
