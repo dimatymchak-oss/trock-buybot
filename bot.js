@@ -578,6 +578,7 @@ function buyCaption(data) {
     `👤 <a href="https://tonviewer.com/${esc(data.recipient)}">${esc(shortAddr(data.recipient))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
     `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n\n` +
+    `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
     `🛒 <a href="${esc(token.buyLink)}">Buy</a>`
