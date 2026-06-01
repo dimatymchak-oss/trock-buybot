@@ -281,7 +281,7 @@ async function refreshTonPrice() {
 
     const tonUsd =
       res.data?.rates?.TON?.prices?.USD ||
-      res.data?.rates?.TON?.USD ||
+      res.data?.rates?.TON?.price ||
       0;
 
     if (Number(tonUsd) > 0) {
