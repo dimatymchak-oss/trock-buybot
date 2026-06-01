@@ -1351,28 +1351,27 @@ bot.onText(/\/recount_burn/, async msg => {
 
     for (const event of events) {
       for (const action of event.actions || []) {
-        const payload = action.FlawedJettonTransfer || action.JettonTransfer;
+        const payload =
+          action.FlawedJettonTransfer ||
+          action.JettonTransfer ||
+          null;
+
         if (!payload) continue;
         if (action.status && action.status !== "ok") continue;
 
         const jettonAddress =
           payload.jetton?.address ||
           payload.jetton?.master ||
+          payload.jetton ||
           "";
 
         if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
-
-        const recipient =
-          payload.recipient?.address ||
-          payload.recipient ||
-          "";
-
-        if (!sameAddress(recipient, token.burnWallet)) continue;
 
         const amountRaw =
           payload.received_amount ||
           payload.sent_amount ||
           payload.amount ||
+          payload.quantity ||
           "0";
 
         const decimals = Number(payload.jetton?.decimals || 9);
