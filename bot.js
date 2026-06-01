@@ -766,6 +766,20 @@ async function checkBuys() {
         }
       }
 
+      if (type === "SmartContractExec" || action.SmartContractExec) {
+  const exec = action.SmartContractExec || {};
+  const operation = String(exec.operation || "").toLowerCase();
+
+  if (operation.includes("dedustswap") && !operation.includes("payout")) {
+    const attached = Number(exec.ton_attached || 0);
+    const attachedTon = attached / 1e9;
+
+    if (attachedTon > tonAmount) {
+      tonAmount = attachedTon;
+    }
+  }
+}
+      
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
