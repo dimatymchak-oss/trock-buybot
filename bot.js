@@ -698,6 +698,8 @@ async function checkBuys() {
 
       const actions = event.actions || [];
 
+      console.log("EVENT:", JSON.stringify(event, null, 2));
+
       const rawJson = JSON.stringify(event).toLowerCase();
 
 const tonMatches = rawJson.match(/"ton_attached":\s*(\d+)/g) || [];
