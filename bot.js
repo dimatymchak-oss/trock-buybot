@@ -908,8 +908,7 @@ return;
         }
       }
 
-if (!burnAmount || burnAmount <= 0) {
-  remember(key);
+if (!burnAmount || burnAmount <= 0 || !sender) {  remember(key);
   saveDb();
   continue;
 }
