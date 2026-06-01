@@ -269,24 +269,28 @@ async function refreshTonPrice() {
   const token = t();
 
   try {
-    const res = await apiGet({
-      method: "get",
-      url: "https://api.dexscreener.com/latest/dex/search",
-      params: {
-        q: "TON USDT"
+    const res = await axios.get(
+      "https://tonapi.io/v2/rates?tokens=ton&currencies=usd",
+      {
+        timeout: 15000,
+        headers: TONAPI_KEY
+          ? { Authorization: `Bearer ${TONAPI_KEY}` }
+          : {}
       }
-    });
-
-    const pairs = res.data?.pairs || [];
-
-    const tonPair = pairs.find(
-      p => String(p.baseToken?.symbol || "").toUpperCase() === "TON"
     );
 
-    if (tonPair?.priceUsd) {
-      token.tonUsd = tonPair.priceUsd;
+    const tonUsd =
+      res.data?.rates?.TON?.prices?.USD ||
+      res.data?.rates?.TON?.USD ||
+      0;
+
+    if (Number(tonUsd) > 0) {
+      token.tonUsd = String(tonUsd);
       saveDb();
     }
+
+    console.log("TON USD:", token.tonUsd);
+
   } catch (e) {
     console.log("TON PRICE ERROR:", e.message);
   }
