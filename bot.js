@@ -560,7 +560,8 @@ function sellCaption(data) {
     `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
-    `🛒 <a href="${esc(token.buyLink)}">Buy</a>`
+    `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
+    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
   );
 }
 
@@ -581,7 +582,8 @@ function buyCaption(data) {
     `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
-    `🛒 <a href="${esc(token.buyLink)}">Buy</a>`
+    `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
+    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
   );
 }
 
@@ -595,7 +597,8 @@ function burnCaption(data) {
     `👤 <code>${esc(shortAddr(data.sender))}</code> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
-    `🛒 <a href="${esc(token.buyLink)}">Buy</a>`
+    `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
+    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
   );
 }
 
@@ -604,12 +607,14 @@ function rewardCaption(data) {
 
   return (
     `💸 <b>${esc(token.symbol)} Rewards!</b>\n\n` +
-    `💰 Отправлено: <b>${esc(fmt(data.amount, 4))} TON</b>\n` +
+    `💰 Выплачено: <b>${esc(fmt(data.amount, 4))} TON</b>\n` +
+    `👛 Всего выплат: <b>${esc(fmt(data.totalRewardedTon || 0, 4))} TON</b>\n` +
     `👥 Получателей: <b>${esc(data.receivers)}</b>\n` +
-    `👛 Wallet: <a href="https://tonviewer.com/${esc(data.wallet)}">${esc(shortAddr(data.wallet))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n\n` +
+    `💼 Wallet: <a href="https://tonviewer.com/${esc(data.wallet)}">${esc(shortAddr(data.wallet))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
-    `🛒 <a href="${esc(token.buyLink)}">Buy</a>`
+    `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
+    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
   );
 }
 
@@ -620,7 +625,8 @@ async function sendPost(type, caption) {
     [
       { text: "🖼 NFT", url: token.nftLink || "https://getgems.io/" },
       { text: "📊 Chart", url: token.chartLink || "https://dexscreener.com/" },
-      { text: "🛒 Buy", url: token.buyLink || "https://app.dedust.io/" }
+      { text: "🛒 Buy", url: token.buyLink || "https://app.dedust.io/" },
+      { text: "🤖 Bot", url: token.botLink || "https://t.me/" }
     ]
   ];
 
@@ -632,6 +638,7 @@ async function sendPost(type, caption) {
 
   const photo =
     type === "buy" ? token.buyPhotoFileId :
+    type === "sell" ? (token.sellPhotoFileId || token.buyPhotoFileId) :
     type === "burn" ? token.burnPhotoFileId :
     type === "reward" ? token.rewardPhotoFileId :
     "";
@@ -659,6 +666,17 @@ async function checkBuys() {
     );
 
     const events = res.data?.events || [];
+    if (!token.buyInitialized) {
+  for (const event of events) {
+    const eventId = event.event_id || event.id || event.hash || "";
+    if (eventId) remember(`buy_event_${eventId}`);
+  }
+
+  token.buyInitialized = true;
+  saveDb();
+  return;
+}
+
 
     for (const event of events.reverse()) {
       const eventId = event.event_id || event.id || event.hash || "";
@@ -760,6 +778,12 @@ async function checkBuys() {
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
 
+      if (tradeType === "sell" && token.sellEnabled === false) {
+  remember(key);
+  saveDb();
+  continue;
+}
+
       await refreshDexData();
 
      await sendPost(
@@ -812,6 +836,17 @@ async function checkBurns() {
     );
 
     const events = res.data?.events || [];
+
+    if (!token.burnInitialized) {
+  for (const event of events) {
+    const eventId = event.event_id || event.id || event.hash || "";
+    if (eventId) remember(`burn_event_${eventId}`);
+  }
+
+  token.burnInitialized = true;
+  saveDb();
+  return;
+}
 
     for (const event of events.reverse()) {
       const eventId = event.event_id || event.id || event.hash || "";
@@ -912,6 +947,17 @@ async function checkRewards() {
 
     const events = res.data?.events || [];
 
+    if (!token.rewardInitialized) {
+  for (const event of events) {
+    const eventId = event.event_id || event.id || event.hash || "";
+    if (eventId) remember(`reward_event_${eventId}`);
+  }
+
+  token.rewardInitialized = true;
+  saveDb();
+  return;
+}
+
     for (const event of events.reverse()) {
       const eventId = event.event_id || event.id || event.hash || "";
       if (!eventId) continue;
@@ -962,6 +1008,7 @@ async function checkRewards() {
         "reward",
         rewardCaption({
           amount: totalTon,
+          totalRewardedTon: token.rewardTotalTon,
           receivers,
           wallet: token.rewardWallet,
           hash: eventId,
@@ -1015,8 +1062,11 @@ function mainMenu() {
         [{ text: "🖼 NFT collection", callback_data: "edit:nftLink" }],
         [{ text: "📊 Chart link", callback_data: "edit:chartLink" }],
         [{ text: "🛒 Buy link", callback_data: "edit:buyLink" }],
+        [{ text: "🤖 Bot link", callback_data: "edit:botLink" }],
+        [{ text: "🔴 Sell posts", callback_data: "toggle:sellEnabled" }],
         [
           { text: "📷 Buy photo", callback_data: "photo:buy" },
+          { text: "📷 Sell photo", callback_data: "photo:sell" },
           { text: "📷 Burn photo", callback_data: "photo:burn" },
           { text: "📷 Reward photo", callback_data: "photo:reward" }
         ],
@@ -1051,44 +1101,67 @@ function statusText() {
 }
 
 async function sendTestBuy(chatId) {
-  await sendPost("buy", buyCaption({
-    amount: 173497.33,
-    tonAmount: 10,
-    recipient: "EQB123456789TESTwalletADDRESS",
-    hash: "test_buy_hash",
-    lt: String(Date.now())
-  }));
+  await refreshDexData();
 
-  t().totalBuyPosts += 1;
+  const token = t();
+
+  await sendPost(
+    "buy",
+    buyCaption({
+      amount: Number(token.testBuyTokens || 173497.33),
+      tonAmount: Number(token.testBuyTon || 10),
+      recipient:
+        token.rewardWallet ||
+        token.burnWallet ||
+        token.dexPoolAddress,
+      sender: token.dexPoolAddress,
+      hash: "test_buy",
+      lt: String(Date.now())
+    })
+  );
+
+  token.totalBuyPosts += 1;
   saveDb();
 
   await bot.sendMessage(chatId, "✅ Test Buy отправлен");
 }
 
 async function sendTestBurn(chatId) {
-  await sendPost("burn", burnCaption({
-    amount: 5000,
-    sender: "EQBURNTESTADDRESS",
-    hash: "test_burn_hash",
-    lt: String(Date.now())
-  }));
+  const token = t();
 
-  t().totalBurnPosts += 1;
+  await sendPost(
+    "burn",
+    burnCaption({
+      amount: Number(token.testBurnTokens || 5000),
+      totalBurn: token.burnedTotal || 0,
+      sender: token.burnWallet,
+      hash: "test_burn",
+      lt: String(Date.now())
+    })
+  );
+
+  token.totalBurnPosts += 1;
   saveDb();
 
   await bot.sendMessage(chatId, "✅ Test Burn отправлен");
 }
 
 async function sendTestReward(chatId) {
-  await sendPost("reward", rewardCaption({
-    amount: 25,
-    receivers: 7,
-    wallet: t().rewardWallet || "EQREWARDTESTADDRESS",
-    hash: "test_reward_hash",
-    lt: String(Date.now())
-  }));
+  const token = t();
 
-  t().totalRewardPosts += 1;
+  await sendPost(
+    "reward",
+    rewardCaption({
+      amount: Number(token.testRewardTon || 1),
+      totalRewardedTon: token.rewardTotalTon || 0,
+      receivers: Number(token.testRewardReceivers || 1),
+      wallet: token.rewardWallet,
+      hash: "test_reward",
+      lt: String(Date.now())
+    })
+  );
+
+  token.totalRewardPosts += 1;
   saveDb();
 
   await bot.sendMessage(chatId, "✅ Test Reward отправлен");
@@ -1182,6 +1255,21 @@ bot.on("callback_query", async q => {
 
   const chatId = q.message.chat.id;
   const data = q.data;
+
+  if (data === "toggle:sellEnabled") {
+  const token = t();
+  token.sellEnabled = !token.sellEnabled;
+  saveDb();
+
+  await bot.answerCallbackQuery(q.id, {
+    text: token.sellEnabled
+      ? "✅ Sell posts включены"
+      : "❌ Sell posts выключены"
+  });
+
+  await bot.sendMessage(chatId, "⚙️ Настройки обновлены", mainMenu());
+  return;
+}
 
   try {
     if (data.startsWith("edit:")) {
