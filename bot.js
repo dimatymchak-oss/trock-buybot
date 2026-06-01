@@ -704,6 +704,7 @@ async function checkBuys() {
       console.log("EVENT:", JSON.stringify(event, null, 2));
 
       let tokenAmount = 0;
+      let tonCalcAmount = 0;
       let tonAmount = 0;
       let buyer = "";
       let txHash = eventId;
@@ -746,19 +747,25 @@ async function checkBuys() {
             payload.sender ||
             "";
 
-          const amountRaw =
-            payload.received_amount ||
-            payload.sent_amount ||
-            payload.amount ||
-            payload.quantity ||
-            "0";
-
           const decimals = Number(payload.jetton?.decimals || 9);
-          const amount = normalizeAmount(amountRaw, decimals);
+
+const receivedAmount = normalizeAmount(
+  payload.received_amount || payload.amount || payload.quantity || "0",
+  decimals
+);
+
+const sentAmount = normalizeAmount(
+  payload.sent_amount || payload.received_amount || payload.amount || "0",
+  decimals
+);
+
+const amount = receivedAmount;
+const amountForTon = sentAmount || receivedAmount;
 
           if (amount > 0) {
             tokenAmount = amount;
-
+            tonCalcAmount = amountForTon;
+      
             if (sameAddress(recipient, token.dexPoolAddress)) {
               tradeType = "sell";
               seller = sender;
@@ -802,7 +809,7 @@ if (
   tokenAmount > 0 &&
   nativePrice > 0
 ) {
-  tonAmount = tokenAmount * nativePrice;
+  tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
   tonAmount = Number(tonAmount.toFixed(3));
 }
       await sendPost(
