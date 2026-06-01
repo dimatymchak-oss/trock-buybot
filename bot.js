@@ -780,6 +780,13 @@ async function checkBuys() {
 
       await refreshDexData();
 
+      console.log("BUY DEBUG:", {
+  tokenAmount,
+  tonAmount,
+  price: token.price,
+  tonUsd: token.tonUsd
+});
+
       if (
   (!tonAmount || tonAmount <= 0) &&
   tokenAmount > 0 &&
