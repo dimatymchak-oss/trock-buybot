@@ -536,6 +536,7 @@ async function refreshDexData() {
     if (!pair) return;
 
     token.price = pair.priceUsd || token.price || "0";
+    token.priceNative = pair.priceNative || token.priceNative || "0";
     token.marketCap = pair.fdv || pair.marketCap || token.marketCap || "0";
 
     saveDb();
@@ -894,26 +895,6 @@ return;
           action.JettonTransfer ||
           action.FlawedJettonTransfer
         ) {
-        
-        if (type === "SmartContractExec" || action.SmartContractExec) {
-  const exec = action.SmartContractExec || {};
-
-  const operation = String(exec.operation || "").toLowerCase();
-
-  if (
-    operation.includes("dedustswap") &&
-    !operation.includes("payout")
-  ) {
-    const attached = Number(exec.ton_attached || 0);
-    const attachedTon = attached / 1e9;
-
-    const realTon = attachedTon - 0.25;
-
-    if (realTon > tonAmount && realTon > 0) {
-      tonAmount = realTon;
-    }
-  }
-}
 
           const recipient =
             payload.recipient?.address ||
@@ -1147,14 +1128,6 @@ function statusText() {
 
 async function sendTestBuy(chatId) {
   await refreshDexData();
-
-if (!tonAmount || tonAmount <= 0) {
-  tonAmount =
-    (tokenAmount * Number(token.price || 0)) /
-    Number(token.tonUsd || 1);
-
-  tonAmount = Number(tonAmount.toFixed(3));
-}
 
   const token = t();
 
