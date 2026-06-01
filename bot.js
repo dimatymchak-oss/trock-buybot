@@ -1287,18 +1287,22 @@ bot.onText(/\/recount_rewards/, async msg => {
 
     for (const event of events) {
       for (const action of event.actions || []) {
-        if (action.type !== "TonTransfer" && !action.TonTransfer) continue;
+        if (action.type !== "TonTransfer" || !action.TonTransfer) continue;
+        if (action.status && action.status !== "ok") continue;
 
-        const payload = action.TonTransfer || {};
+        const payload = action.TonTransfer;
+
         const sender = payload.sender?.address || payload.sender || "";
+        const recipient = payload.recipient?.address || payload.recipient || "";
 
         if (!sameAddress(sender, token.rewardWallet)) continue;
+        if (!recipient) continue;
 
-        const amountRaw = payload.amount || payload.value || "0";
-        const amountTon =
-          Number(amountRaw) > 1000000
-            ? Number(amountRaw) / 1e9
-            : Number(amountRaw);
+        const amountRaw = payload.amount || "0";
+        const amountTon = Number(amountRaw) / 1e9;
+
+        if (!amountTon || amountTon <= 0) continue;
+        if (amountTon > 100) continue; // защита от неправильных данных
 
         total += amountTon;
       }
@@ -1347,26 +1351,20 @@ bot.onText(/\/recount_burn/, async msg => {
 
     for (const event of events) {
       for (const action of event.actions || []) {
-        const payload =
-          action.JettonTransfer ||
-          action.FlawedJettonTransfer ||
-          {};
-
+        const payload = action.FlawedJettonTransfer || action.JettonTransfer;
         if (!payload) continue;
+        if (action.status && action.status !== "ok") continue;
 
         const jettonAddress =
           payload.jetton?.address ||
           payload.jetton?.master ||
-          payload.jetton ||
           "";
 
-        if (jettonAddress && !sameAddress(jettonAddress, token.jettonMaster)) continue;
+        if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
 
         const recipient =
           payload.recipient?.address ||
           payload.recipient ||
-          payload.receiver?.address ||
-          payload.receiver ||
           "";
 
         if (!sameAddress(recipient, token.burnWallet)) continue;
@@ -1375,11 +1373,14 @@ bot.onText(/\/recount_burn/, async msg => {
           payload.received_amount ||
           payload.sent_amount ||
           payload.amount ||
-          payload.quantity ||
           "0";
 
         const decimals = Number(payload.jetton?.decimals || 9);
-        total += normalizeAmount(amountRaw, decimals);
+        const amount = normalizeAmount(amountRaw, decimals);
+
+        if (!amount || amount <= 0) continue;
+
+        total += amount;
       }
     }
 
@@ -1388,7 +1389,7 @@ bot.onText(/\/recount_burn/, async msg => {
 
     await bot.sendMessage(
       msg.chat.id,
-      `✅ Burn пересчитан\n\n🔥 Total Burn: ${fmt(token.burnedTotal, 4)} ${token.symbol}`
+      `✅ Burn пересчитан\n\n🔥 Total Burn: ${fmt(token.burnedTotal, 2)} ${token.symbol}`
     );
   } catch (e) {
     await bot.sendMessage(
