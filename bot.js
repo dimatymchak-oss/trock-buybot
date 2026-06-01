@@ -1336,51 +1336,30 @@ bot.onText(/\/recount_burn/, async msg => {
     const headers = {};
     if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
 
-    let total = 0;
-
     const res = await axios.get(
-      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.burnWallet)}/events`,
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.burnWallet)}/jettons`,
       {
-        params: { limit: 100 },
         headers,
         timeout: 20000
       }
     );
 
-    const events = res.data?.events || [];
+    const balances = res.data?.balances || [];
 
-    for (const event of events) {
-      for (const action of event.actions || []) {
-        const payload =
-          action.FlawedJettonTransfer ||
-          action.JettonTransfer ||
-          null;
+    let total = 0;
 
-        if (!payload) continue;
-        if (action.status && action.status !== "ok") continue;
+    for (const item of balances) {
+      const jettonAddress =
+        item.jetton?.address ||
+        item.jetton?.master ||
+        item.jetton ||
+        "";
 
-        const jettonAddress =
-          payload.jetton?.address ||
-          payload.jetton?.master ||
-          payload.jetton ||
-          "";
+      if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
 
-        if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
-
-        const amountRaw =
-          payload.received_amount ||
-          payload.sent_amount ||
-          payload.amount ||
-          payload.quantity ||
-          "0";
-
-        const decimals = Number(payload.jetton?.decimals || 9);
-        const amount = normalizeAmount(amountRaw, decimals);
-
-        if (!amount || amount <= 0) continue;
-
-        total += amount;
-      }
+      const decimals = Number(item.jetton?.decimals || 9);
+      total = normalizeAmount(item.balance || "0", decimals);
+      break;
     }
 
     token.burnedTotal = String(total.toFixed(9));
