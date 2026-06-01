@@ -700,18 +700,6 @@ async function checkBuys() {
 
       console.log("EVENT:", JSON.stringify(event, null, 2));
 
-      const rawJson = JSON.stringify(event).toLowerCase();
-
-const tonMatches = rawJson.match(/"ton_attached":\s*(\d+)/g) || [];
-
-for (const m of tonMatches) {
-  const n = Number(m.replace(/\D/g, "")) / 1e9;
-
-  if (n > tonAmount && n < 50) {
-    tonAmount = n;
-  }
-}
-
       let tokenAmount = 0;
       let tonAmount = 0;
       let buyer = "";
@@ -779,10 +767,6 @@ for (const m of tonMatches) {
           }
         }
       }
-      
-      if (tonAmount > 0.24 && tonAmount < 0.26) {
-  tonAmount = 0;
-}
 
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
@@ -795,6 +779,19 @@ for (const m of tonMatches) {
       }
 
       await refreshDexData();
+
+      if (
+  (!tonAmount || tonAmount <= 0) &&
+  tokenAmount > 0 &&
+  Number(token.price || 0) > 0 &&
+  Number(token.tonUsd || 0) > 0
+) {
+  tonAmount =
+    (tokenAmount * Number(token.price)) /
+    Number(token.tonUsd);
+
+  tonAmount = Number(tonAmount.toFixed(3));
+}
 
       await sendPost(
         tradeType,
