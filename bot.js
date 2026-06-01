@@ -25,6 +25,8 @@ if (!ADMIN_IDS.length) throw new Error("ADMIN_IDS missing");
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
+const BOT_STARTED_AT = Math.floor(Date.now() / 1000);
+
 let isMonitoring = false;
 const state = {};
 
@@ -521,7 +523,7 @@ async function refreshDexData() {
   if (!token.chartLink) return;
 
   try {
-    const pairAddress = String(token.chartLink).split("/").pop();
+    const pairAddress = token.dexPoolAddress || String(token.chartLink).split("/").pop();
 
     if (!pairAddress || pairAddress === "ton") return;
 
@@ -679,6 +681,14 @@ async function checkBuys() {
 
 
     for (const event of events.reverse()) {
+   
+    if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
+  const oldEventId = event.event_id || event.id || event.hash || "";
+  if (oldEventId) remember(`burn_event_${oldEventId}`);
+  saveDb();
+  continue;
+}
+
       const eventId = event.event_id || event.id || event.hash || "";
       if (!eventId) continue;
 
@@ -761,7 +771,7 @@ async function checkBuys() {
   const attachedTon = attached / 1e9;
 
   if (attachedTon > tonAmount) {
-    tonAmount = attachedTon * 2;
+    tonAmount = attachedTon;
   }
 }
 
