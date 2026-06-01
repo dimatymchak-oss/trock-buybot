@@ -289,8 +289,6 @@ async function refreshTonPrice() {
       saveDb();
     }
 
-    console.log("TON USD:", token.tonUsd);
-
   } catch (e) {
     console.log("TON PRICE ERROR:", e.message);
   }
