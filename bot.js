@@ -790,12 +790,10 @@ async function checkBuys() {
       if (
   (!tonAmount || tonAmount <= 0) &&
   tokenAmount > 0 &&
-  Number(token.price || 0) > 0 &&
-  Number(token.tonUsd || 0) > 0
+  Number(token.priceNative || 0) > 0
 ) {
   tonAmount =
-    (tokenAmount * Number(token.price)) /
-    Number(token.tonUsd);
+    tokenAmount * Number(token.priceNative);
 
   tonAmount = Number(tonAmount.toFixed(3));
 }
