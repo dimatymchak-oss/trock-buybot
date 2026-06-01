@@ -576,7 +576,9 @@ function buyCaption(data) {
   return (
     `🚀 <b>${esc(token.symbol)} Buy!</b>\n\n` +
     `${emojis}\n\n` +
-    `💵 <b>${esc(fmt(tonAmount, 2))} TON</b>${usdAmount ? ` ($${esc(fmt(usdAmount, 2))})` : ""}\n` +
+    (tonAmount > 0
+  ? `💵 <b>${esc(fmt(tonAmount, 2))} TON</b>${usdAmount ? ` ($${esc(fmt(usdAmount, 2))})` : ""}\n`
+  : "") +
     `↔️ <b>${esc(fmt(data.amount, 2))} ${esc(token.symbol)}</b>\n` +
     `👤 <a href="https://tonviewer.com/${esc(data.recipient)}">${esc(shortAddr(data.recipient))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
@@ -763,20 +765,8 @@ async function checkBuys() {
     buyer = recipient;
   }
 }
-        }
 
- if (type === "SmartContractExec" || action.SmartContractExec) {
-  const exec = action.SmartContractExec || {};
-  const attached = Number(exec.ton_attached || 0);
-  const attachedTon = attached / 1e9;
-
-  if (attachedTon > tonAmount) {
-    tonAmount = attachedTon;
-  }
-}
-       }
-
-      if (!tokenAmount || !buyer) continue;
+      if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
 
@@ -793,6 +783,10 @@ async function checkBuys() {
   token.price = String(priceUsd.toFixed(10));
   token.marketCap = String(priceUsd * 100000000);
   saveDb();
+}
+
+     if (!tonAmount || tonAmount <= 0) {
+  tonAmount = 0;
 }
 
      await sendPost(
