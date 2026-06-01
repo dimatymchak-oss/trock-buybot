@@ -1329,8 +1329,8 @@ bot.onText(/\/recount_burn/, async msg => {
 
   const token = t();
 
-  if (!token.burnWallet || !token.jettonMaster) {
-    return bot.sendMessage(msg.chat.id, "❌ Burn wallet или Jetton master не задан");
+  if (!token.jettonMaster) {
+    return bot.sendMessage(msg.chat.id, "❌ Jetton master не задан");
   }
 
   try {
@@ -1338,34 +1338,44 @@ bot.onText(/\/recount_burn/, async msg => {
     if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
 
     const res = await axios.get(
-      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.burnWallet)}/jettons`,
+      `https://tonapi.io/v2/jettons/${encodeURIComponent(token.jettonMaster)}/holders`,
       {
+        params: { limit: 1000 },
         headers,
         timeout: 20000
       }
     );
 
-    const balances = res.data?.balances || [];
+    const holders = res.data?.addresses || res.data?.holders || [];
 
     let total = 0;
 
-    for (const item of balances) {
-      const jettonAddress =
-        item.jetton?.address ||
-        item.jetton?.master ||
-        item.jetton ||
+    for (const h of holders) {
+      const holder =
+        h.owner?.address ||
+        h.wallet?.owner?.address ||
+        h.address ||
+        h.owner ||
         "";
 
-      if (
-  jettonAddress &&
-  !sameAddress(jettonAddress, token.jettonMaster) &&
-  String(jettonAddress) !== String(token.jettonMaster)
-) {
-  continue;
-}
+      const name =
+        h.owner?.name ||
+        h.name ||
+        "";
 
-      const decimals = Number(item.jetton?.decimals || 9);
-      total = normalizeAmount(item.balance || "0", decimals);
+      const isZero =
+        String(name).toLowerCase().includes("zero") ||
+        sameAddress(holder, "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c");
+
+      if (!isZero) continue;
+
+      const raw =
+        h.balance ||
+        h.amount ||
+        h.jetton_balance ||
+        "0";
+
+      total = normalizeAmount(raw, Number(h.jetton?.decimals || 9));
       break;
     }
 
