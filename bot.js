@@ -684,7 +684,7 @@ async function checkBuys() {
    
     if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
   const oldEventId = event.event_id || event.id || event.hash || "";
-  if (oldEventId) remember(`burn_event_${oldEventId}`);
+  remember(`buy_event_${oldEventId}`);
   saveDb();
   continue;
 }
@@ -774,15 +774,7 @@ async function checkBuys() {
     tonAmount = attachedTon;
   }
 }
-
-        if (JSON.stringify(action).toLowerCase().includes("dedust")) {
-          const raw = payload.amount_in || payload.amount || payload.value || 0;
-          const n = Number(raw);
-          if (n > 0) {
-            tonAmount = n > 1000000 ? n / 1e9 : n;
-          }
-        }
-      }
+       }
 
       if (!tokenAmount || !buyer) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
@@ -795,6 +787,13 @@ async function checkBuys() {
 }
 
       await refreshDexData();
+
+      if (tokenAmount > 0 && tonAmount > 0 && Number(token.tonUsd || 0) > 0) {
+  const priceUsd = (tonAmount * Number(token.tonUsd)) / tokenAmount;
+  token.price = String(priceUsd.toFixed(10));
+  token.marketCap = String(priceUsd * 100000000);
+  saveDb();
+}
 
      await sendPost(
   tradeType,
