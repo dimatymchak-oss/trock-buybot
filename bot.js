@@ -765,20 +765,6 @@ async function checkBuys() {
           }
         }
       }
-
-      if (type === "SmartContractExec" || action.SmartContractExec) {
-  const exec = action.SmartContractExec || {};
-  const operation = String(exec.operation || "").toLowerCase();
-
-  if (operation.includes("dedustswap") && !operation.includes("payout")) {
-    const attached = Number(exec.ton_attached || 0);
-    const attachedTon = attached / 1e9;
-
-    if (attachedTon > tonAmount) {
-      tonAmount = attachedTon;
-    }
-  }
-}
       
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
@@ -888,6 +874,21 @@ return;
           action.JettonTransfer ||
           action.FlawedJettonTransfer
         ) {
+        
+        if (type === "SmartContractExec" || action.SmartContractExec) {
+  const exec = action.SmartContractExec || {};
+  const operation = String(exec.operation || "").toLowerCase();
+
+  if (operation.includes("dedustswap") && !operation.includes("payout")) {
+    const attached = Number(exec.ton_attached || 0);
+    const attachedTon = attached / 1e9;
+
+    if (attachedTon > tonAmount) {
+      tonAmount = attachedTon;
+    }
+  }
+}
+
           const recipient =
             payload.recipient?.address ||
             payload.recipient ||
@@ -1120,6 +1121,14 @@ function statusText() {
 
 async function sendTestBuy(chatId) {
   await refreshDexData();
+
+if (!tonAmount || tonAmount <= 0) {
+  tonAmount =
+    (tokenAmount * Number(token.price || 0)) /
+    Number(token.tonUsd || 1);
+
+  tonAmount = Number(tonAmount.toFixed(3));
+}
 
   const token = t();
 
