@@ -1398,6 +1398,39 @@ bot.onText(/\/recount_burn/, async msg => {
   }
 });
 
+bot.onText(/\/debugburn/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  try {
+    const headers = {};
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+
+    const res = await axios.get(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.burnWallet)}/events`,
+      {
+        params: { limit: 1 },
+        headers,
+        timeout: 20000
+      }
+    );
+
+    const event = res.data?.events?.[0];
+
+    await bot.sendMessage(
+      msg.chat.id,
+      "<pre>" + esc(JSON.stringify(event, null, 2).slice(0, 3500)) + "</pre>",
+      { parse_mode: "HTML" }
+    );
+  } catch (e) {
+    await bot.sendMessage(
+      msg.chat.id,
+      `❌ ${e.response?.status || ""} ${e.message}`
+    );
+  }
+});
+
 bot.on("callback_query", async q => {
   if (!isAdmin(q.from.id)) {
     return bot.answerCallbackQuery(q.id, { text: "Нет доступа" });
