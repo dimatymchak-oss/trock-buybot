@@ -764,7 +764,6 @@ async function checkBuys() {
     tradeType = "buy";
     buyer = recipient;
   }
-}
 
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
