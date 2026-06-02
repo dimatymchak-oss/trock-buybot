@@ -530,6 +530,29 @@ function parseRewards(txs) {
   return result;
 }
 
+async function refreshHolders() {
+  const token = t();
+  if (!token.jettonMaster) return;
+
+  try {
+    const res = await axios.get(
+      `https://tonviewer.com/api/v1/jetton/${encodeURIComponent(token.jettonMaster)}`,
+      {
+        timeout: 15000
+      }
+    );
+
+    token.holders =
+      res.data?.holdersCount ||
+      res.data?.holders ||
+      0;
+
+    saveDb();
+  } catch (e) {
+    console.log("HOLDERS ERROR:", e.response?.status || "", e.message);
+  }
+}
+
 async function refreshDexData() {
   const token = t();
 
@@ -1221,6 +1244,7 @@ async function monitorLoop() {
 
     await refreshMarketData();
     await refreshTonPrice();
+    await refreshHolders();
 
     await checkBuys();
     await checkBurns();
@@ -1310,6 +1334,7 @@ function statusText() {
 
 async function sendTestBuy(chatId) {
   await refreshDexData();
+  await refreshHolders();
   await refreshMarketData();
   const token = t();
 
