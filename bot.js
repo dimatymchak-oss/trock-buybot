@@ -1434,8 +1434,21 @@ bot.onText(/\/recount_rewards/, async msg => {
       }
 
       const lastTx = txs[txs.length - 1];
-      lt = lastTx.transaction_id?.lt || lastTx.lt;
-      hash = lastTx.transaction_id?.hash || lastTx.hash;
+      const nextLt = lastTx.transaction_id?.lt || lastTx.lt;
+const nextHash = lastTx.transaction_id?.hash || lastTx.hash;
+
+if (!nextLt || !nextHash) break;
+
+if (
+  String(nextLt) === String(lt) &&
+  String(nextHash) === String(hash)
+) {
+  console.log("RECOUNT STOP: same cursor");
+  break;
+}
+
+lt = nextLt;
+hash = nextHash;
 
       console.log(`RECOUNT: ${processed} tx | ${total.toFixed(4)} TON | next lt ${lt}`);
 
