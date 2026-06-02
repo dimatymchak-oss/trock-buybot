@@ -882,6 +882,17 @@ const amountForTon = sentAmount || receivedAmount;
         continue;
       }
 
+   if (tradeType === "buy" && Number(event.extra || 0) < 0) {
+  const extraTon = Math.abs(Number(event.extra)) / 1e9;
+  const dedustService = 0.047988674;
+
+  const realTon = extraTon - dedustService;
+
+  if (realTon > 0) {
+    tonAmount = Number(realTon.toFixed(3));
+  }
+}
+
    console.log("BUY DEBUG:", {
   tokenAmount,
   tonAmount,
@@ -980,42 +991,19 @@ async function checkBurns() {
 
     const events = res.data?.events || [];
 
-    if (!token.burnInitialized) {
-
-    for (const event of events) {
-  const eventId = event.event_id || event.id || event.hash || "";
-
-  if (eventId) {
-    remember(`burn_event_${eventId}`);
-  }
-}
-
-token.burnInitialized = true;
-saveDb();
-
-console.log("✅ Burn history initialized");
-
-return;
-}
-
     for (const event of events.reverse()) {
-
-    if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
-  const oldEventId = event.event_id || event.id || event.hash || "";
-
-  if (oldEventId) {
-    remember(`burn_event_${oldEventId}`);
-  }
-
-  saveDb();
-  continue;
-}
-
       const eventId = event.event_id || event.id || event.hash || "";
       if (!eventId) continue;
 
       const key = `burn_event_${eventId}`;
+
       if (hasProcessed(key)) continue;
+
+      if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
+        remember(key);
+        saveDb();
+        continue;
+      }
 
       const actions = event.actions || [];
 
@@ -1025,24 +1013,47 @@ return;
 
       for (const action of actions) {
         const type = action.type || "";
+
+        const burnPayload =
+          action.JettonBurn ||
+          action.jetton_burn ||
+          {};
+
         const payload =
           action.JettonTransfer ||
           action.FlawedJettonTransfer ||
           action.payload ||
           {};
 
-        const burnPayload =
-  action.JettonBurn ||
-  action.jetton_burn ||
-  {};
+        if (
+          type === "JettonBurn" ||
+          action.JettonBurn ||
+          action.jetton_burn
+        ) {
+          const amountRaw =
+            burnPayload.amount ||
+            burnPayload.jetton_amount ||
+            "0";
+
+          burnAmount = normalizeAmount(amountRaw, 9);
+
+          sender =
+            burnPayload.sender?.address ||
+            burnPayload.sender ||
+            burnPayload.owner?.address ||
+            burnPayload.owner ||
+            "";
+        }
 
         if (
-          type === "JettonTransfer" ||
-          type === "FlawedJettonTransfer" ||
-          action.JettonTransfer ||
-          action.FlawedJettonTransfer
+          !burnAmount &&
+          (
+            type === "JettonTransfer" ||
+            type === "FlawedJettonTransfer" ||
+            action.JettonTransfer ||
+            action.FlawedJettonTransfer
+          )
         ) {
-
           const recipient =
             payload.recipient?.address ||
             payload.recipient ||
@@ -1052,50 +1063,43 @@ return;
 
           if (!sameAddress(recipient, token.burnWallet)) continue;
 
-          console.log("BURN MATCH:", {
-  recipient,
-  burnWallet: token.burnWallet
-});
-
           sender =
             payload.sender?.address ||
             payload.sender ||
             "";
 
           const amountRaw =
-  burnPayload.amount ||
-  burnPayload.jetton_amount ||
-  payload.amount ||
-  payload.sent_amount ||
-  payload.received_amount ||
-  payload.quantity ||
-  "0";
+            payload.amount ||
+            payload.sent_amount ||
+            payload.received_amount ||
+            payload.quantity ||
+            "0";
 
           const decimals = Number(payload.jetton?.decimals || 9);
           burnAmount = normalizeAmount(amountRaw, decimals);
-          if (burnAmount <= 0) continue;
         }
       }
 
-if (!burnAmount || burnAmount <= 0 || !sender) {  remember(key);
-  saveDb();
-  continue;
-}
+      if (!burnAmount || burnAmount <= 0 || !sender) {
+        remember(key);
+        saveDb();
+        continue;
+      }
 
       token.burnedTotal = String(
-  Number(Number(token.burnedTotal || 0) + Number(burnAmount || 0)).toFixed(9)
-);
+        Number(Number(token.burnedTotal || 0) + Number(burnAmount || 0)).toFixed(9)
+      );
 
-await sendPost(
-  "burn",
-  burnCaption({
-    amount: burnAmount,
-    totalBurn: token.burnedTotal,
-    sender,
-    hash: txHash,
-    lt: String(Date.now())
-  })
-);
+      await sendPost(
+        "burn",
+        burnCaption({
+          amount: burnAmount,
+          totalBurn: token.burnedTotal,
+          sender,
+          hash: txHash,
+          lt: String(Date.now())
+        })
+      );
 
       token.totalBurnPosts += 1;
       remember(key);
