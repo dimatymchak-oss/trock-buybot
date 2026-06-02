@@ -1397,56 +1397,84 @@ bot.onText(/\/recount_rewards/, async msg => {
   }
 
   try {
-    const headers = {};
-    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+    await bot.sendMessage(msg.chat.id, "🔄 Пересчитываю все транзакции...");
+
+    let lt = undefined;
+    let hash = undefined;
 
     let total = 0;
+    let processed = 0;
 
-    const res = await axios.get(
-      `https://tonapi.io/v2/accounts/${encodeURIComponent(token.rewardWallet)}/events`,
-      {
-        params: { limit: 100 },
-        headers,
-        timeout: 20000
+    const processedTx = new Set();
+
+    while (true) {
+      const txs = await toncenterTxs(
+        token.rewardWallet,
+        100,
+        lt,
+        hash
+      );
+
+      await new Promise(r => setTimeout(r, 1200));
+
+      if (!txs.length) break;
+
+      for (const tx of txs) {
+        const txHash =
+          tx.transaction_id?.hash ||
+          tx.hash;
+
+        if (processedTx.has(txHash)) continue;
+
+        processedTx.add(txHash);
+
+        const outMsgs = Array.isArray(tx.out_msgs)
+          ? tx.out_msgs
+          : [];
+
+        for (const out of outMsgs) {
+          const amountTon =
+            Number(out.value || 0) / 1e9;
+
+          if (amountTon > 0) {
+            total += amountTon;
+          }
+        }
+
+        processed++;
+
+        lt =
+          tx.transaction_id?.lt ||
+          tx.lt;
+
+        hash = txHash;
       }
-    );
 
-    const events = res.data?.events || [];
-
-    for (const event of events) {
-      for (const action of event.actions || []) {
-        if (action.type !== "TonTransfer" || !action.TonTransfer) continue;
-        if (action.status && action.status !== "ok") continue;
-
-        const payload = action.TonTransfer;
-
-        const sender = payload.sender?.address || payload.sender || "";
-        const recipient = payload.recipient?.address || payload.recipient || "";
-
-        if (!sameAddress(sender, token.rewardWallet)) continue;
-        if (!recipient) continue;
-
-        const amountRaw = payload.amount || "0";
-        const amountTon = Number(amountRaw) / 1e9;
-
-        if (!amountTon || amountTon <= 0) continue;
-        if (amountTon > 100) continue; // защита от неправильных данных
-
-        total += amountTon;
-      }
+      console.log(
+        `RECOUNT: ${processed} tx | ${total.toFixed(4)} TON`
+      );
     }
 
-    token.rewardTotalTon = String(total.toFixed(9));
+    token.rewardTotalTon = total.toFixed(9);
+
     saveDb();
 
     await bot.sendMessage(
       msg.chat.id,
-      `✅ Пересчитано\n\n👛 Всего выплат: ${fmt(token.rewardTotalTon, 4)} TON`
+      `✅ Пересчитано по ВСЕМ транзакциям\n\n` +
+      `👛 Реально отправлено: <b>${esc(fmt(total, 6))} TON</b>\n` +
+      `📦 Транзакций: <b>${processed}</b>`,
+      {
+        parse_mode: "HTML"
+      }
     );
+
   } catch (e) {
+    console.log("RECOUNT ERROR:", e);
+
     await bot.sendMessage(
       msg.chat.id,
-      `❌ Ошибка пересчёта:\n${e.response?.status || ""} ${e.message}`
+      `❌ Ошибка:\n${e.message}`
     );
   }
 });
