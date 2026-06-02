@@ -897,6 +897,16 @@ if (
   );
 }
 
+  if (tradeType === "buy") {
+  if (!token.topBuyers) token.topBuyers = {};
+
+  const buyerKey = String(buyer || "").toLowerCase();
+
+  token.topBuyers[buyerKey] =
+    (Number(token.topBuyers[buyerKey]) || 0) +
+    Number(tonAmount || 0);
+}
+
       await sendPost(
         tradeType,
         tradeType === "sell"
@@ -918,14 +928,6 @@ if (
       );
 
       token.totalBuyPosts += 1;
-
-      if (!token.topBuyers) token.topBuyers = {};
-
-const buyerKey = String(buyer || "").toLowerCase();
-
-token.topBuyers[buyerKey] =
-  (Number(token.topBuyers[buyerKey]) || 0) +
-  Number(tonAmount || 0);
 
       remember(key);
       saveDb();
@@ -996,6 +998,11 @@ return;
           action.payload ||
           {};
 
+        const burnPayload =
+  action.JettonBurn ||
+  action.jetton_burn ||
+  {};
+
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
@@ -1023,14 +1030,17 @@ return;
             "";
 
           const amountRaw =
-            payload.received_amount ||
-            payload.sent_amount ||
-            payload.amount ||
-            payload.quantity ||
-            "0";
+  burnPayload.amount ||
+  burnPayload.jetton_amount ||
+  payload.amount ||
+  payload.sent_amount ||
+  payload.received_amount ||
+  payload.quantity ||
+  "0";
 
           const decimals = Number(payload.jetton?.decimals || 9);
           burnAmount = normalizeAmount(amountRaw, decimals);
+          if (burnAmount <= 0) continue;
         }
       }
 
