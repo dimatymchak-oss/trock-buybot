@@ -552,11 +552,25 @@ async function refreshDexData() {
     token.priceNative = pair.priceNative || token.priceNative || "0";
     token.marketCap = pair.fdv || pair.marketCap || token.marketCap || "0";
 
-    token.holders =
-  pair.holders ||
-  pair.info?.holders ||
-  token.holders ||
-  0;
+    try {
+  const hRes = await axios.get(
+    `https://tonapi.io/v2/jettons/${encodeURIComponent(token.jettonMaster)}/holders`,
+    {
+      params: { limit: 1 },
+      timeout: 15000,
+      headers: TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : {}
+    }
+  );
+
+  token.holders =
+    hRes.data?.total ||
+    hRes.data?.total_count ||
+    hRes.data?.count ||
+    token.holders ||
+    0;
+} catch (e) {
+  console.log("HOLDERS ERROR:", e.message);
+}
 
     const currentMc = Number(token.marketCap || 0);
 
