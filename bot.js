@@ -1443,17 +1443,12 @@ bot.onText(/\/recount_rewards/, async msg => {
 
         processed++;
 
-        lt =
-          tx.transaction_id?.lt ||
-          tx.lt;
+        const lastTx = txs[txs.length - 1];
 
-        hash = txHash;
-      }
+lt = lastTx.transaction_id?.lt || lastTx.lt;
+hash = lastTx.transaction_id?.hash || lastTx.hash;
 
-      console.log(
-        `RECOUNT: ${processed} tx | ${total.toFixed(4)} TON`
-      );
-    }
+      console.log(`RECOUNT: ${processed} tx | ${total.toFixed(4)} TON | next lt ${lt}`);
 
     token.rewardTotalTon = total.toFixed(9);
 
