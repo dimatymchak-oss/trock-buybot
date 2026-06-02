@@ -1116,8 +1116,15 @@ async function checkBurns() {
             payload.receiver?.address ||
             payload.receiver ||
             "";
+ 
+           const jettonAddress =
+  payload.jetton?.address ||
+  payload.jetton?.master ||
+  payload.jetton ||
+  "";
 
           if (!sameAddress(recipient, token.burnWallet)) continue;
+          if (!sameAddress(jettonAddress, token.jettonMaster)) continue;
 
           sender =
             payload.sender?.address ||
@@ -1125,14 +1132,13 @@ async function checkBurns() {
             "";
 
           const amountRaw =
-            payload.amount ||
-            payload.sent_amount ||
-            payload.received_amount ||
-            payload.quantity ||
-            "0";
+  payload.received_amount ||
+  payload.amount ||
+  "0";
 
           const decimals = Number(payload.jetton?.decimals || 9);
           burnAmount = normalizeAmount(amountRaw, decimals);
+          if (burnAmount <= 0) continue;
         }
       }
 
