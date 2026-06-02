@@ -985,6 +985,18 @@ return;
 }
 
     for (const event of events.reverse()) {
+
+    if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
+  const oldEventId = event.event_id || event.id || event.hash || "";
+
+  if (oldEventId) {
+    remember(`burn_event_${oldEventId}`);
+  }
+
+  saveDb();
+  continue;
+}
+
       const eventId = event.event_id || event.id || event.hash || "";
       if (!eventId) continue;
 
