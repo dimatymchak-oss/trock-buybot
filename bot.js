@@ -259,6 +259,12 @@ async function refreshMarketData() {
     token.price = p.priceUsd || token.price || "0";
     token.marketCap = p.fdv || p.marketCap || token.marketCap || "0";
 
+    token.holders =
+  p.holders ||
+  p.info?.holders ||
+  token.holders ||
+  0;
+
     saveDb();
   } catch (e) {
     console.log("DEX DATA ERROR:", e.message);
@@ -541,6 +547,16 @@ async function refreshDexData() {
     token.priceNative = pair.priceNative || token.priceNative || "0";
     token.marketCap = pair.fdv || pair.marketCap || token.marketCap || "0";
 
+    const currentMc = Number(token.marketCap || 0);
+
+if (
+  currentMc > 0 &&
+  currentMc > Number(token.athMarketCap || 0)
+) {
+  token.athMarketCap = currentMc;
+  token.newAthDetected = true;
+}
+
     saveDb();
   } catch (e) {
     console.log("DEX DATA ERROR:", e.message);
@@ -562,6 +578,7 @@ function sellCaption(data) {
     `👤 <a href="https://tonviewer.com/${esc(data.seller)}">${esc(shortAddr(data.seller))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
     `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n\n` +
+    `👥 Holders: <b>${esc(fmt(token.holders || 0, 0))}</b>\n\n` +
     `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
@@ -570,20 +587,51 @@ function sellCaption(data) {
   );
 }
 
+function buyLevel(ton) {
+  ton = Number(ton || 0);
+
+  if (ton >= 20) return "👑 Whale Buy";
+  if (ton >= 5) return "🦈 Big Buy";
+  if (ton >= 1) return "🐬 Medium Buy";
+
+  return "🐟 Small Buy";
+}
+
 function buyCaption(data) {
   const token = t();
   const tonAmount = Number(data.tonAmount || 0);
   const usdAmount = tonAmount * Number(token.tonUsd || 0);
   const emojis = buyEmojiByTon(tonAmount);
+  const level = buyLevel(tonAmount);
+  const newHolder = data.newHolder ? "🎖 New Holder\n" : "";
+  const topBuyers = Object.entries(token.topBuyers || {})
+  .filter(([addr, amount]) => addr && Number(amount) > 0)
+  .sort((a, b) => Number(b[1]) - Number(a[1]))
+  .slice(0, 3);
+
+let topText = "";
+
+if (topBuyers.length) {
+  topText = "\n🐋 <b>Top Buyers</b>\n";
+
+  topBuyers.forEach(([addr, amount], i) => {
+    topText += `${i + 1}. <code>${esc(shortAddr(addr))}</code> — <b>${esc(fmt(amount, 2))} TON</b>\n`;
+  });
+
+  topText += "\n";
+}
 
   return (
     `🚀 <b>${esc(token.symbol)} Buy!</b>\n\n` +
-    `${emojis}\n\n` +
+    `${emojis}\n` +
+    `${newHolder}` +
+    `🔥 ${level}\n\n` +
     `💵 <b>${esc(fmt(tonAmount || 0, 2))} TON</b>${usdAmount ? ` ($${esc(fmt(usdAmount, 2))})` : ""}\n` +
     `↔️ <b>${esc(fmt(data.amount, 2))} ${esc(token.symbol)}</b>\n` +
     `👤 <a href="https://tonviewer.com/${esc(data.recipient)}">${esc(shortAddr(data.recipient))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
-    `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n\n` +
+    `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n` +
+    `${topText}` +
     `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
@@ -627,13 +675,18 @@ async function sendPost(type, caption) {
   const token = t();
 
   const buttons = [
-    [
-      { text: "🖼 NFT", url: token.nftLink || "https://getgems.io/" },
-      { text: "📊 Chart", url: token.chartLink || "https://dexscreener.com/" },
-      { text: "🛒 Buy", url: token.buyLink || "https://app.dedust.io/" },
-      { text: "🤖 Bot", url: token.botLink || "https://t.me/" }
-    ]
-  ];
+  [
+    { text: "🖼 NFT", url: token.nftLink || "https://getgems.io/" },
+    { text: "📊 Chart", url: token.chartLink || "https://dexscreener.com/" },
+    { text: "🛒 Buy", url: token.buyLink || "https://app.dedust.io/" },
+    { text: "🤖 Bot", url: token.botLink || "https://t.me/" }
+  ],
+  [
+    { text: "🚀 Dex", url: token.chartLink || "https://dexscreener.com/" },
+    { text: "🦎 Gecko", url: token.geckoLink || token.chartLink || "https://www.geckoterminal.com/" },
+    { text: "🛠 DEXTools", url: token.dexToolsLink || token.chartLink || "https://www.dextools.io/" }
+  ]
+];
 
   const opt = {
     parse_mode: "HTML",
@@ -810,6 +863,18 @@ if (
   tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
   tonAmount = Number(tonAmount.toFixed(3));
 }
+
+  if (token.newAthDetected) {
+  token.newAthDetected = false;
+
+  await sendPost(
+    "buy",
+    `🏆 <b>NEW ATH!</b>\n\n` +
+    `🚀 <b>${esc(token.symbol)}</b> reached a new ATH!\n\n` +
+    `🌊 MarketCap: <b>$${esc(fmt(token.athMarketCap, 0))}</b>`
+  );
+}
+
       await sendPost(
         tradeType,
         tradeType === "sell"
@@ -831,6 +896,15 @@ if (
       );
 
       token.totalBuyPosts += 1;
+
+      if (!token.topBuyers) token.topBuyers = {};
+
+const buyerKey = String(buyer || "").toLowerCase();
+
+token.topBuyers[buyerKey] =
+  (Number(token.topBuyers[buyerKey]) || 0) +
+  Number(tonAmount || 0);
+
       remember(key);
       saveDb();
     }
@@ -1097,28 +1171,51 @@ function mainMenu() {
   return {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "🧾 Jetton master", callback_data: "edit:jettonMaster" }],
-        [{ text: "🏊 DEX pool", callback_data: "edit:dexPoolAddress" }],
-        [{ text: "🔥 Burn wallet", callback_data: "edit:burnWallet" }],
-        [{ text: "💸 Reward wallet", callback_data: "edit:rewardWallet" }],
-        [{ text: "🖼 NFT collection", callback_data: "edit:nftLink" }],
-        [{ text: "📊 Chart link", callback_data: "edit:chartLink" }],
-        [{ text: "🛒 Buy link", callback_data: "edit:buyLink" }],
-        [{ text: "🤖 Bot link", callback_data: "edit:botLink" }],
-        [{ text: "🔴 Sell posts", callback_data: "toggle:sellEnabled" }],
+        [{ text: "⚙️ Основные настройки", callback_data: "noop" }],
         [
-          { text: "📷 Buy photo", callback_data: "photo:buy" },
-          { text: "📷 Sell photo", callback_data: "photo:sell" },
-          { text: "📷 Burn photo", callback_data: "photo:burn" },
-          { text: "📷 Reward photo", callback_data: "photo:reward" }
+          { text: "🧾 Jetton", callback_data: "edit:jettonMaster" },
+          { text: "🏊 DEX Pool", callback_data: "edit:dexPoolAddress" }
         ],
         [
-          { text: "🧪 Test Buy", callback_data: "test_buy" },
+          { text: "🔥 Burn Wallet", callback_data: "edit:burnWallet" },
+          { text: "💸 Reward Wallet", callback_data: "edit:rewardWallet" }
+        ],
+
+        [{ text: "🔗 Ссылки", callback_data: "noop" }],
+        [
+          { text: "🖼 NFT", callback_data: "edit:nftLink" },
+          { text: "📊 Chart", callback_data: "edit:chartLink" }
+        ],
+        [
+          { text: "🛒 Buy", callback_data: "edit:buyLink" },
+          { text: "🤖 Bot", callback_data: "edit:botLink" }
+        ],
+        [
+          { text: "🦎 Gecko", callback_data: "edit:geckoLink" },
+          { text: "🛠 DEXTools", callback_data: "edit:dexToolsLink" }
+        ],
+        
+
+        [{ text: "🖼 Медиа", callback_data: "noop" }],
+        [
+          { text: "📷 Buy Photo", callback_data: "photo:buy" },
+          { text: "📷 Sell Photo", callback_data: "photo:sell" }
+        ],
+        [
+          { text: "📷 Burn Photo", callback_data: "photo:burn" },
+          { text: "📷 Reward Photo", callback_data: "photo:reward" }
+        ],
+
+        [{ text: "🧪 Тесты", callback_data: "noop" }],
+        [
+          { text: "🚀 Test Buy", callback_data: "test_buy" },
           { text: "🔥 Test Burn", callback_data: "test_burn" },
           { text: "💸 Test Reward", callback_data: "test_reward" }
         ],
+
+        [{ text: "🔴 Sell Posts On/Off", callback_data: "toggle:sellEnabled" }],
         [{ text: "🔄 Проверить сейчас", callback_data: "force_check" }],
-        [{ text: "📊 Статус", callback_data: "status" }]
+        [{ text: "📊 Статус бота", callback_data: "status" }]
       ]
     }
   };
@@ -1515,6 +1612,11 @@ bot.on("callback_query", async q => {
   const chatId = q.message.chat.id;
   const data = q.data;
 
+  if (data === "noop") {
+  await bot.answerCallbackQuery(q.id);
+  return;
+}
+
   if (data === "toggle:sellEnabled") {
   const token = t();
   token.sellEnabled = !token.sellEnabled;
@@ -1577,6 +1679,47 @@ bot.on("callback_query", async q => {
     } catch {}
   }
 });
+
+bot.onText(/^\/?price$/i, async msg => {
+  const token = t();
+
+  await refreshDexData();
+  await refreshTonPrice();
+
+  const tonUsd = Number(token.tonUsd || 0);
+  const trockUsd = Number(token.price || 0);
+
+  const trockTon =
+    tonUsd > 0 && trockUsd > 0
+      ? trockUsd / tonUsd
+      : Number(token.priceNative || 0);
+
+  const text =
+    `💎 <b>${esc(token.symbol)} Price</b>\n\n` +
+    `💰 TON: <b>$${esc(tonUsd.toFixed(3))}</b>\n` +
+    `🚀 ${esc(token.symbol)}: <b>$${esc(trockUsd.toFixed(8))}</b>\n` +
+    `💎 ${esc(token.symbol)} / TON: <b>${esc(trockTon.toFixed(10))} TON</b>\n\n` +
+    `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>`;
+
+  await bot.sendMessage(msg.chat.id, text, {
+    parse_mode: "HTML",
+    disable_web_page_preview: true
+  });
+});
+
+bot.onText(/^\/?ca$/i, async msg => {
+  const token = t();
+
+  const text =
+    `📜 <b>${esc(token.symbol)} Contract</b>\n\n` +
+    `<code>${esc(token.jettonMaster)}</code>`;
+
+  await bot.sendMessage(msg.chat.id, text, {
+    parse_mode: "HTML"
+  });
+});
+
+bot.on("message", async msg => {
 
 bot.on("message", async msg => {
   if (!isAdmin(msg.from?.id)) return;
