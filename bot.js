@@ -509,13 +509,13 @@ function parseRewards(txs) {
       const amount = toTon(msg.value || 0);
       const dest = msg.destination || msg.destination_address || msg.to || "";
 
-      if (amount >= Number(token.minRewardTon || 0.01) && dest) {
+      if (amount >= Number(token.minRewardTon || 0.001) && dest) {
         total += amount;
         receivers.add(addressKey(dest));
       }
     }
 
-    if (total >= Number(token.minRewardTon || 0.01) && receivers.size) {
+    if (total >= Number(token.minRewardTon || 0.001) && receivers.size) {
       result.push({
         lt,
         hash,
@@ -1112,7 +1112,7 @@ async function checkRewards() {
               ? Number(amountRaw) / 1e9
               : Number(amountRaw);
 
-          if (amountTon >= Number(token.minRewardTon || 0.01)) {
+          if (amountTon >= Number(token.minRewardTon || 0.001)) {
             totalTon += amountTon;
             receivers += 1;
           }
@@ -1804,7 +1804,7 @@ bot.on("polling_error", err => {
 setInterval(monitorLoop, MONITOR_INTERVAL_MS);
 
 (async () => {
-  console.log("✅ TON MONITOR STARTED");if (!lt || !hash) break;
+  console.log("✅ TON MONITOR STARTED");
   saveDb();
 
   try {
