@@ -685,13 +685,16 @@ async function sendPost(type, caption) {
     { text: "📊 Chart", url: token.chartLink || "https://dexscreener.com/" },
     { text: "🛒 Buy", url: token.buyLink || "https://app.dedust.io/" },
     { text: "🤖 Bot", url: token.botLink || "https://t.me/" }
-  ],
-  [
+  ]
+];
+
+if (type === "buy") {
+  buttons.push([
     { text: "🚀 Dex", url: token.chartLink || "https://dexscreener.com/" },
     { text: "🦎 Gecko", url: token.geckoLink || token.chartLink || "https://www.geckoterminal.com/" },
     { text: "🛠 DEXTools", url: token.dexToolsLink || token.chartLink || "https://www.dextools.io/" }
-  ]
-];
+  ]);
+}
 
   const opt = {
     parse_mode: "HTML",
