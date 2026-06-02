@@ -30,6 +30,28 @@ const BOT_STARTED_AT = Math.floor(Date.now() / 1000);
 let isMonitoring = false;
 const state = {};
 
+const floodMap = new Map();
+
+const badWords = [
+  "airdrop",
+  "claim",
+  "seed phrase",
+  "mnemonic",
+  "connect wallet",
+  "free ton",
+  "bonus",
+  "giveaway",
+  "http://",
+  "https://",
+  "t.me/",
+  "telegram.me/"
+];
+
+function isSpamText(text = "") {
+  const s = String(text).toLowerCase();
+  return badWords.some(w => s.includes(w));
+}
+
 function defaultDb() {
   return {
     token: {
@@ -72,7 +94,8 @@ function defaultDb() {
       burnedTotal: "0",
 
       processed: [],
-      lastError: ""
+      lastError: "",
+      antiSpamWhitelist: ["exton_swap_bot"],
     }
   };
 }
@@ -1347,6 +1370,12 @@ function mainMenu() {
 
         [{ text: "🔴 Sell Posts On/Off", callback_data: "toggle:sellEnabled" }],
         [{ text: "🔄 Проверить сейчас", callback_data: "force_check" }],
+
+        [
+          { text: "➕ Whitelist", callback_data: "edit:addWhitelist" },
+          { text: "➖ Whitelist", callback_data: "edit:removeWhitelist" }
+        ],
+
         [{ text: "📊 Статус бота", callback_data: "status" }]
       ]
     }
@@ -1871,6 +1900,56 @@ bot.onText(/^\/?ca$/i, async msg => {
 });
 
 bot.on("message", async msg => {
+  try {
+    if (!msg.chat || msg.chat.type === "private") return;
+    if (isAdmin(msg.from?.id)) return;
+
+    const username = String(msg.from?.username || "").toLowerCase();
+    const userId = String(msg.from?.id || "");
+
+    const whitelist = (t().antiSpamWhitelist || [])
+      .map(x => String(x).replace("@", "").toLowerCase());
+
+    if (whitelist.includes(username) || whitelist.includes(userId)) return;
+
+    const text = msg.text || msg.caption || "";
+
+    if (isSpamText(text)) {
+      await bot.deleteMessage(msg.chat.id, msg.message_id);
+      return;
+    }
+
+    const key = `${msg.chat.id}:${msg.from.id}`;
+    const now = Date.now();
+
+    const arr = floodMap.get(key) || [];
+    const recent = arr.filter(t => now - t < 10000);
+    recent.push(now);
+    floodMap.set(key, recent);
+
+    if (recent.length >= 5) {
+      await bot.deleteMessage(msg.chat.id, msg.message_id);
+
+      await bot.restrictChatMember(msg.chat.id, msg.from.id, {
+        permissions: {
+          can_send_messages: false
+        },
+        until_date: Math.floor(Date.now() / 1000) + 300
+      });
+
+      await bot.sendMessage(
+        msg.chat.id,
+        `🔇 ${esc(msg.from.first_name || "User")} muted за флуд на 5 минут`
+      );
+
+      return;
+    }
+  } catch (e) {
+    console.log("ANTISPAM ERROR:", e.message);
+  }
+});
+
+bot.on("message", async msg => {
   if (!isAdmin(msg.from?.id)) return;
   if (!msg.text || msg.text.startsWith("/")) return;
 
@@ -1890,6 +1969,38 @@ bot.on("message", async msg => {
   if (addressFields.includes(s.field)) {
     value = normalizeAddress(value);
   }
+
+  if (s.field === "addWhitelist") {
+  const item = value.replace("@", "").toLowerCase();
+
+  if (!t().antiSpamWhitelist) t().antiSpamWhitelist = [];
+  if (!t().antiSpamWhitelist.includes(item)) {
+    t().antiSpamWhitelist.push(item);
+  }
+
+  saveDb();
+  delete state[msg.from.id];
+
+  return bot.sendMessage(msg.chat.id, `✅ Добавлено в whitelist: ${esc(item)}`, {
+    parse_mode: "HTML",
+    ...mainMenu()
+  });
+}
+
+if (s.field === "removeWhitelist") {
+  const item = value.replace("@", "").toLowerCase();
+
+  t().antiSpamWhitelist = (t().antiSpamWhitelist || [])
+    .filter(x => x !== item);
+
+  saveDb();
+  delete state[msg.from.id];
+
+  return bot.sendMessage(msg.chat.id, `✅ Удалено из whitelist: ${esc(item)}`, {
+    parse_mode: "HTML",
+    ...mainMenu()
+  });
+}
 
   t()[s.field] = value;
   saveDb();
