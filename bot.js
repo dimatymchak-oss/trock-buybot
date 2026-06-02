@@ -778,6 +778,20 @@ async function checkBuys() {
           action.payload ||
           {};
 
+        if (type === "SmartContractExec" || action.SmartContractExec) {
+  const exec = action.SmartContractExec || {};
+  const operation = String(exec.operation || "");
+
+  if (operation === "DedustSwap") {
+    const attachedTon = Number(exec.ton_attached || 0) / 1e9;
+    const realTon = attachedTon - 0.25;
+
+    if (realTon > 0) {
+      tonAmount = Number(realTon.toFixed(3));
+    }
+  }
+}
+
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
