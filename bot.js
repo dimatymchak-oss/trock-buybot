@@ -1451,8 +1451,6 @@ lt = nextLt;
 hash = nextHash;
 
       console.log(`RECOUNT: ${processed} tx | ${total.toFixed(4)} TON | next lt ${lt}`);
-
-      if (!lt || !hash) break;
     }
 
     token.rewardTotalTon = total.toFixed(9);
@@ -1806,7 +1804,7 @@ bot.on("polling_error", err => {
 setInterval(monitorLoop, MONITOR_INTERVAL_MS);
 
 (async () => {
-  console.log("✅ TON MONITOR STARTED");
+  console.log("✅ TON MONITOR STARTED");if (!lt || !hash) break;
   saveDb();
 
   try {
