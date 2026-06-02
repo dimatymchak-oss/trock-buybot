@@ -552,6 +552,12 @@ async function refreshDexData() {
     token.priceNative = pair.priceNative || token.priceNative || "0";
     token.marketCap = pair.fdv || pair.marketCap || token.marketCap || "0";
 
+    token.holders =
+  pair.holders ||
+  pair.info?.holders ||
+  token.holders ||
+  0;
+
     const currentMc = Number(token.marketCap || 0);
 
 if (
@@ -636,6 +642,7 @@ if (topBuyers.length) {
     `👤 <a href="https://tonviewer.com/${esc(data.recipient)}">${esc(shortAddr(data.recipient))}</a> | <a href="${esc(tonviewerTx(data.hash))}">Txn</a>\n` +
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
     `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n` +
+    `👥 Holders: <b>${esc(fmt(token.holders || 0, 0))}</b>\n` +
     `${topText}` +
     `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
