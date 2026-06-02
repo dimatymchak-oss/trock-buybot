@@ -1720,8 +1720,6 @@ bot.onText(/^\/?ca$/i, async msg => {
 });
 
 bot.on("message", async msg => {
-
-bot.on("message", async msg => {
   if (!isAdmin(msg.from?.id)) return;
   if (!msg.text || msg.text.startsWith("/")) return;
 
