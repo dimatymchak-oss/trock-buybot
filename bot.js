@@ -1310,7 +1310,7 @@ function statusText() {
 
 async function sendTestBuy(chatId) {
   await refreshDexData();
-
+  await refreshMarketData();
   const token = t();
 
   await sendPost(
