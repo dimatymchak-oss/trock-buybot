@@ -1395,19 +1395,19 @@ async function sendTestBuy(chatId) {
 async function sendTestBurn(chatId) {
   const token = t();
 
+  const amount = Number(token.testBurnTokens || 5000);
+  const realTotalBurn = Number(token.burnedTotal || 0) + amount;
+
   await sendPost(
     "burn",
     burnCaption({
-      amount: Number(token.testBurnTokens || 5000),
-      totalBurn: token.burnedTotal || 0,
+      amount,
+      totalBurn: realTotalBurn,
       sender: token.burnWallet,
       hash: "test_burn",
       lt: String(Date.now())
     })
   );
-
-  token.totalBurnPosts += 1;
-  saveDb();
 
   await bot.sendMessage(chatId, "✅ Test Burn отправлен");
 }
