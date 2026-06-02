@@ -535,19 +535,41 @@ async function refreshHolders() {
   if (!token.jettonMaster) return;
 
   try {
-    const res = await axios.get(
-      `https://tonviewer.com/api/v1/jetton/${encodeURIComponent(token.jettonMaster)}`,
-      {
-        timeout: 15000
-      }
-    );
+    const headers = TONAPI_KEY
+      ? { Authorization: `Bearer ${TONAPI_KEY}` }
+      : {};
 
-    token.holders =
-      res.data?.holdersCount ||
-      res.data?.holders ||
-      0;
+    let offset = 0;
+    const limit = 1000;
+    let total = 0;
 
+    while (true) {
+      const res = await axios.get(
+        `https://tonapi.io/v2/jettons/${encodeURIComponent(token.jettonMaster)}/holders`,
+        {
+          params: { limit, offset },
+          headers,
+          timeout: 20000
+        }
+      );
+
+      const holders =
+        res.data?.addresses ||
+        res.data?.holders ||
+        [];
+
+      total += holders.length;
+
+      if (holders.length < limit) break;
+
+      offset += limit;
+
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    token.holders = total;
     saveDb();
+
   } catch (e) {
     console.log("HOLDERS ERROR:", e.response?.status || "", e.message);
   }
