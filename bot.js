@@ -323,22 +323,27 @@ async function tonapiJettonHistory(account, master, limit = 30) {
   }
 }
 
-async function toncenterTxs(address, limit = 20) {
+async function toncenterTxs(address, limit = 20, lt = undefined, hash = undefined) {
   const headers = {};
 
   if (TONCENTER_API_KEY) {
     headers["X-API-Key"] = TONCENTER_API_KEY;
   }
 
+  const params = {
+    address,
+    limit,
+    archival: true
+  };
+
+  if (lt) params.lt = lt;
+  if (hash) params.hash = hash;
+
   try {
     const res = await apiGet({
       method: "get",
       url: "https://toncenter.com/api/v2/getTransactions",
-      params: {
-        address,
-        limit,
-        archival: true
-      },
+      params,
       headers
     });
 
@@ -1399,59 +1404,45 @@ bot.onText(/\/recount_rewards/, async msg => {
   try {
     await bot.sendMessage(msg.chat.id, "🔄 Пересчитываю все транзакции...");
 
-    let lt = undefined;
-    let hash = undefined;
-
+    let lt;
+    let hash;
     let total = 0;
     let processed = 0;
-
     const processedTx = new Set();
 
     while (true) {
-      const txs = await toncenterTxs(
-        token.rewardWallet,
-        100,
-        lt,
-        hash
-      );
+      const txs = await toncenterTxs(token.rewardWallet, 100, lt, hash);
 
-      await new Promise(r => setTimeout(r, 1200));
+      await new Promise(r => setTimeout(r, 1500));
 
       if (!txs.length) break;
 
       for (const tx of txs) {
-        const txHash =
-          tx.transaction_id?.hash ||
-          tx.hash;
-
-        if (processedTx.has(txHash)) continue;
+        const txHash = tx.transaction_id?.hash || tx.hash || "";
+        if (!txHash || processedTx.has(txHash)) continue;
 
         processedTx.add(txHash);
 
-        const outMsgs = Array.isArray(tx.out_msgs)
-          ? tx.out_msgs
-          : [];
+        const outMsgs = Array.isArray(tx.out_msgs) ? tx.out_msgs : [];
 
         for (const out of outMsgs) {
-          const amountTon =
-            Number(out.value || 0) / 1e9;
-
-          if (amountTon > 0) {
-            total += amountTon;
-          }
+          const amountTon = Number(out.value || 0) / 1e9;
+          if (amountTon > 0) total += amountTon;
         }
 
         processed++;
+      }
 
-        const lastTx = txs[txs.length - 1];
-
-lt = lastTx.transaction_id?.lt || lastTx.lt;
-hash = lastTx.transaction_id?.hash || lastTx.hash;
+      const lastTx = txs[txs.length - 1];
+      lt = lastTx.transaction_id?.lt || lastTx.lt;
+      hash = lastTx.transaction_id?.hash || lastTx.hash;
 
       console.log(`RECOUNT: ${processed} tx | ${total.toFixed(4)} TON | next lt ${lt}`);
 
-    token.rewardTotalTon = total.toFixed(9);
+      if (!lt || !hash) break;
+    }
 
+    token.rewardTotalTon = total.toFixed(9);
     saveDb();
 
     await bot.sendMessage(
@@ -1459,9 +1450,7 @@ hash = lastTx.transaction_id?.hash || lastTx.hash;
       `✅ Пересчитано по ВСЕМ транзакциям\n\n` +
       `👛 Реально отправлено: <b>${esc(fmt(total, 6))} TON</b>\n` +
       `📦 Транзакций: <b>${processed}</b>`,
-      {
-        parse_mode: "HTML"
-      }
+      { parse_mode: "HTML" }
     );
 
   } catch (e) {
