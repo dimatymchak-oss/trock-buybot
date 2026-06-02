@@ -1036,13 +1036,13 @@ async function checkBurns() {
 
     const events = res.data?.events || [];
 
-    if (!token.burnInitialized) {
+    if (!token.burnInitializedV4) {
   for (const event of events) {
     const eventId = event.event_id || event.id || event.event_hash || "";
     if (eventId) remember(`burn_event_${eventId}`);
   }
 
-  token.burnInitialized = true;
+  token.burnInitializedV4 = true;
   saveDb();
   return;
 }
