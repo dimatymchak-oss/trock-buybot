@@ -870,6 +870,15 @@ async function checkBuys() {
           action.payload ||
           {};
 
+      if (type === "SmartContractExec" || action.SmartContractExec) {
+  const exec = action.SmartContractExec || {};
+  const attachedTon = Number(exec.ton_attached || 0) / 1e9;
+
+  if (attachedTon > 0.25) {
+    tonAmount = Number((attachedTon - 0.25).toFixed(6));
+  }
+}
+
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
@@ -955,9 +964,9 @@ const nativePrice =
       : 0
   );
 
-if (tokenAmount > 0 && nativePrice > 0) {
+if ((!tonAmount || tonAmount <= 0) && tokenAmount > 0 && nativePrice > 0) {
   tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
-  tonAmount = Number(tonAmount.toFixed(3));
+  tonAmount = Number(tonAmount.toFixed(6));
 }
   if (token.newAthDetected) {
   token.newAthDetected = false;
