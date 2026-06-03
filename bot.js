@@ -874,16 +874,6 @@ async function checkBuys() {
   const exec = action.SmartContractExec || {};
   const operation = String(exec.operation || "");
 
-  if (operation === "DedustSwap") {
-    const attachedTon = Number(exec.ton_attached || 0) / 1e9;
-    const realTon = attachedTon - 0.25;
-
-    if (realTon > 0) {
-      tonAmount = Number(realTon.toFixed(3));
-    }
-  }
-}
-
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
@@ -953,17 +943,6 @@ const amountForTon = sentAmount || receivedAmount;
         continue;
       }
 
-   if (tradeType === "buy" && Number(event.extra || 0) < 0) {
-  const extraTon = Math.abs(Number(event.extra)) / 1e9;
-  const dedustService = 0.047988674;
-
-  const realTon = extraTon - dedustService;
-
-  if (realTon > 0) {
-    tonAmount = Number(realTon.toFixed(3));
-  }
-}
-
    console.log("BUY DEBUG:", {
   tokenAmount,
   tonAmount,
@@ -980,17 +959,20 @@ const nativePrice =
       : 0
   );
 
-if (
-  (!tonAmount || tonAmount <= 0) &&
-  tokenAmount > 0 &&
-  nativePrice > 0
-) {
+if (tokenAmount > 0 && nativePrice > 0) {
   tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
   tonAmount = Number(tonAmount.toFixed(3));
 }
-
   if (token.newAthDetected) {
   token.newAthDetected = false;
+
+  await sendPost(
+    "buy",
+    `🏆 <b>NEW ATH!</b>\n\n` +
+    `🚀 <b>${esc(token.symbol)}</b> reached a new ATH!\n\n` +
+    `🌊 MarketCap: <b>$${esc(fmt(token.athMarketCap, 0))}</b>`
+  );
+}
 
   if (token.raffleEnabled && tradeType === "buy") {
   const tickets = Math.floor(Number(tonAmount || 0));
@@ -1007,26 +989,9 @@ if (
 
     await bot.sendMessage(
       GROUP_CHAT_ID,
-      `🎟 <b>TROCK Raffle Ticket</b>\n\n` +
-      `👤 Кошелёк: <a href="https://tonviewer.com/${esc(buyer)}">${esc(shortAddr(buyer))}</a>\n` +
-      `💰 Покупка: <b>${esc(fmt(tonAmount, 2))} TON</b>\n` +
-      `🎫 Получено билетов: <b>+${tickets}</b>\n` +
-      `🎟 Всего билетов: <b>${esc(token.raffleTickets[walletKey])}</b>\n\n` +
-      `ℹ️ 1 TON = 1 билет`,
-      {
-        parse_mode: "HTML",
-        disable_web_page_preview: true
-      }
+      ...
     );
   }
-}
-
-  await sendPost(
-    "buy",
-    `🏆 <b>NEW ATH!</b>\n\n` +
-    `🚀 <b>${esc(token.symbol)}</b> reached a new ATH!\n\n` +
-    `🌊 MarketCap: <b>$${esc(fmt(token.athMarketCap, 0))}</b>`
-  );
 }
 
   if (tradeType === "buy") {
