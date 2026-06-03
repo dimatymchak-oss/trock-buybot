@@ -872,14 +872,20 @@ async function checkBuys() {
 
       if (type === "SmartContractExec" || action.SmartContractExec) {
   const exec = action.SmartContractExec || {};
-  const attachedTon = Number(exec.ton_attached || 0) / 1e9;
 
-  if (attachedTon > 0.25) {
-    const realBuyTon = Number((attachedTon - 0.25).toFixed(6));
+  const attachedTon =
+    Number(exec.ton_attached || 0) / 1e9;
 
-    if (!tonAmount || realBuyTon > tonAmount) {
-      tonAmount = realBuyTon;
-    }
+  const valueTon =
+    Number(exec.value || 0) / 1e9;
+
+  const totalTon =
+    attachedTon > 0
+      ? attachedTon
+      : valueTon;
+
+  if (totalTon > 0.25) {
+    tonAmount = Number((totalTon - 0.25).toFixed(6));
   }
 }
 
@@ -953,6 +959,7 @@ const amountForTon = sentAmount || receivedAmount;
       }
 
    console.log("BUY DEBUG:", {
+  attachedTon: attachedTon,
   tokenAmount,
   tonAmount,
   price: token.price,
