@@ -1831,21 +1831,7 @@ bot.on("callback_query", async q => {
   return;
 }
 
-  if (data === "toggle:sellEnabled") {
-  const token = t();
-  token.sellEnabled = !token.sellEnabled;
-  saveDb();
-
-  await bot.answerCallbackQuery(q.id, {
-    text: token.sellEnabled
-      ? "✅ Sell posts включены"
-      : "❌ Sell posts выключены"
-  });
-
-  await bot.sendMessage(chatId, "🔴 Sell posts обновлены", mainMenu());
-return;
-
-  if (data === "toggle:raffleEnabled") {
+   if (data === "toggle:raffleEnabled") {
   const token = t();
   token.raffleEnabled = !token.raffleEnabled;
   saveDb();
@@ -1859,6 +1845,20 @@ return;
   await bot.sendMessage(chatId, "🎟 Raffle обновлен", mainMenu());
   return;
 }
+
+  if (data === "toggle:sellEnabled") {
+  const token = t();
+  token.sellEnabled = !token.sellEnabled;
+  saveDb();
+
+  await bot.answerCallbackQuery(q.id, {
+    text: token.sellEnabled
+      ? "✅ Sell posts включены"
+      : "❌ Sell posts выключены"
+  });
+
+  await bot.sendMessage(chatId, "🔴 Sell posts обновлены", mainMenu());
+return;
 
   await bot.sendMessage(chatId, "⚙️ Настройки обновлены", mainMenu());
   return;
