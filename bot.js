@@ -700,7 +700,17 @@ function buyCaption(data) {
   const emojis = buyEmojiByTon(tonAmount);
   const level = buyLevel(tonAmount);
   const newHolder = data.newHolder ? "🎖 New Holder\n" : "";
-  const topBuyers = Object.entries(token.topBuyers || {})
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+const buyers24h = {};
+
+for (const item of token.buyHistory24h || []) {
+  if (!item.wallet || Number(item.time || 0) < dayAgo) continue;
+
+  const key = String(item.wallet).toLowerCase();
+  buyers24h[key] = (Number(buyers24h[key]) || 0) + Number(item.ton || 0);
+}
+
+const topBuyers = Object.entries(buyers24h)
   .filter(([addr, amount]) => addr && Number(amount) > 0)
   .sort((a, b) => Number(b[1]) - Number(a[1]))
   .slice(0, 3);
@@ -708,7 +718,7 @@ function buyCaption(data) {
 let topText = "";
 
 if (topBuyers.length) {
-  topText = "\n🐋 <b>Top Buyers</b>\n";
+  topText = "\n🐋 <b>Top Buyers 24h</b>\n";
 
   topBuyers.forEach(([addr, amount], i) => {
     topText += `${i + 1}. <code>${esc(shortAddr(addr))}</code> — <b>${esc(fmt(amount, 2))} TON</b>\n`;
@@ -1059,13 +1069,19 @@ const nativePrice =
 }
 
   if (tradeType === "buy") {
-  if (!token.topBuyers) token.topBuyers = {};
+  if (!Array.isArray(token.buyHistory24h)) token.buyHistory24h = [];
 
-  const buyerKey = String(buyer || "").toLowerCase();
+  token.buyHistory24h.push({
+    wallet: buyer,
+    ton: Number(tonAmount || 0),
+    time: Date.now()
+  });
 
-  token.topBuyers[buyerKey] =
-    (Number(token.topBuyers[buyerKey]) || 0) +
-    Number(tonAmount || 0);
+  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+  token.buyHistory24h = token.buyHistory24h.filter(x =>
+    x && Number(x.time || 0) >= dayAgo
+  );
 }
 
       await sendPost(
