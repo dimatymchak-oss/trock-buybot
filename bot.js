@@ -870,10 +870,6 @@ async function checkBuys() {
           action.payload ||
           {};
 
-        if (type === "SmartContractExec" || action.SmartContractExec) {
-  const exec = action.SmartContractExec || {};
-  const operation = String(exec.operation || "");
-
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
