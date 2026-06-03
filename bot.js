@@ -1842,6 +1842,9 @@ bot.on("callback_query", async q => {
       : "❌ Sell posts выключены"
   });
 
+  await bot.sendMessage(chatId, "🔴 Sell posts обновлены", mainMenu());
+return;
+
   if (data === "toggle:raffleEnabled") {
   const token = t();
   token.raffleEnabled = !token.raffleEnabled;
