@@ -988,9 +988,18 @@ if (tokenAmount > 0 && nativePrice > 0) {
     saveDb();
 
     await bot.sendMessage(
-      GROUP_CHAT_ID,
-      ...
-    );
+  GROUP_CHAT_ID,
+  `🎟 <b>TROCK Raffle Ticket</b>\n\n` +
+  `👤 Кошелёк: <a href="https://tonviewer.com/${esc(buyer)}">${esc(shortAddr(buyer))}</a>\n` +
+  `💰 Покупка: <b>${esc(fmt(tonAmount, 2))} TON</b>\n` +
+  `🎫 Получено билетов: <b>+${tickets}</b>\n` +
+  `🎟 Всего билетов: <b>${esc(token.raffleTickets[walletKey])}</b>\n\n` +
+  `ℹ️ 1 TON = 1 билет`,
+  {
+    parse_mode: "HTML",
+    disable_web_page_preview: true
+  }
+);
   }
 }
 
