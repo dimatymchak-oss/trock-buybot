@@ -1429,6 +1429,7 @@ function statusText() {
     `🛒 Buy posts: <b>${token.totalBuyPosts}</b>\n` +
     `🔥 Burn posts: <b>${token.totalBurnPosts}</b>\n` +
     `💸 Reward posts: <b>${token.totalRewardPosts}</b>\n\n` +
+    `🎟 Raffle: <b>${token.raffleEnabled ? "ON" : "OFF"}</b>\n` +
     `🧠 Error: <code>${esc(token.lastError || "-")}</code>`
   );
 }
