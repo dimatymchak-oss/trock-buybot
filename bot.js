@@ -1003,7 +1003,6 @@ if (tradeType === "buy" && (!tonAmount || tonAmount <= 0)) {
       }
 
    console.log("BUY DEBUG:", {
-  attachedTon: attachedTon,
   tokenAmount,
   tonAmount,
   price: token.price,
