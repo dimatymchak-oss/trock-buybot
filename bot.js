@@ -805,6 +805,49 @@ if (type === "buy") {
   return bot.sendMessage(GROUP_CHAT_ID, caption, opt);
 }
 
+async function getBuyerDedustTon(buyer, timestamp) {
+  if (!buyer) return 0;
+
+  try {
+    const headers = {};
+    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
+
+    const res = await axios.get(
+      `https://tonapi.io/v2/accounts/${encodeURIComponent(buyer)}/events`,
+      {
+        params: { limit: 10 },
+        headers,
+        timeout: 20000
+      }
+    );
+
+    const events = res.data?.events || [];
+
+    for (const ev of events) {
+      if (timestamp && Math.abs(Number(ev.timestamp || 0) - Number(timestamp)) > 120) {
+        continue;
+      }
+
+      for (const action of ev.actions || []) {
+        const exec = action.SmartContractExec || {};
+        const operation = String(exec.operation || "").toLowerCase();
+
+        if (!operation.includes("dedustswap")) continue;
+
+        const attachedTon = Number(exec.ton_attached || 0) / 1e9;
+
+        if (attachedTon > 0.25) {
+          return Number((attachedTon - 0.25).toFixed(6));
+        }
+      }
+    }
+  } catch (e) {
+    console.log("BUYER DEDUST TON ERROR:", e.response?.status || "", e.message);
+  }
+
+  return 0;
+}
+
 async function checkBuys() {
   const token = t();
 
@@ -870,25 +913,6 @@ async function checkBuys() {
           action.payload ||
           {};
 
-      if (type === "SmartContractExec" || action.SmartContractExec) {
-  const exec = action.SmartContractExec || {};
-
-  const attachedTon =
-    Number(exec.ton_attached || 0) / 1e9;
-
-  const valueTon =
-    Number(exec.value || 0) / 1e9;
-
-  const totalTon =
-    attachedTon > 0
-      ? attachedTon
-      : valueTon;
-
-  if (totalTon > 0.25) {
-    tonAmount = Number((totalTon - 0.25).toFixed(6));
-  }
-}
-
         if (
           type === "JettonTransfer" ||
           type === "FlawedJettonTransfer" ||
@@ -951,6 +975,26 @@ const amountForTon = sentAmount || receivedAmount;
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
+
+      if (tradeType === "buy") {
+  const realTon = await getBuyerDedustTon(buyer, event.timestamp);
+
+  if (realTon > 0) {
+    tonAmount = realTon;
+  }
+}
+
+if (tradeType === "buy" && (!tonAmount || tonAmount <= 0)) {
+  console.log("BUY SKIPPED: TON amount not found", {
+    buyer,
+    eventId,
+    tokenAmount
+  });
+
+  remember(key);
+  saveDb();
+  continue;
+}
 
       if (tradeType === "sell" && token.sellEnabled === false) {
         remember(key);
