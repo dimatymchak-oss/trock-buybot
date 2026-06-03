@@ -872,15 +872,9 @@ async function checkBuys() {
 
       if (type === "SmartContractExec" || action.SmartContractExec) {
   const exec = action.SmartContractExec || {};
-  const operation = String(exec.operation || "").toLowerCase();
-
-  const isDedustSwap =
-    operation.includes("dedustswap") ||
-    operation.includes("dedust swap");
-
   const attachedTon = Number(exec.ton_attached || 0) / 1e9;
 
-  if (isDedustSwap && attachedTon > 0.25) {
+  if (attachedTon > 0.25) {
     const realBuyTon = Number((attachedTon - 0.25).toFixed(6));
 
     if (!tonAmount || realBuyTon > tonAmount) {
