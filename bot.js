@@ -95,6 +95,9 @@ function defaultDb() {
 
       processed: [],
       lastError: "",
+
+      raffleEnabled: false,
+      raffleTickets: {},
       antiSpamWhitelist: ["exton_swap_bot"],
     }
   };
@@ -989,6 +992,35 @@ if (
   if (token.newAthDetected) {
   token.newAthDetected = false;
 
+  if (token.raffleEnabled && tradeType === "buy") {
+  const tickets = Math.floor(Number(tonAmount || 0));
+
+  if (tickets > 0) {
+    if (!token.raffleTickets) token.raffleTickets = {};
+
+    const walletKey = String(buyer || "").toLowerCase();
+
+    token.raffleTickets[walletKey] =
+      (Number(token.raffleTickets[walletKey]) || 0) + tickets;
+
+    saveDb();
+
+    await bot.sendMessage(
+      GROUP_CHAT_ID,
+      `🎟 <b>TROCK Raffle Ticket</b>\n\n` +
+      `👤 Кошелёк: <a href="https://tonviewer.com/${esc(buyer)}">${esc(shortAddr(buyer))}</a>\n` +
+      `💰 Покупка: <b>${esc(fmt(tonAmount, 2))} TON</b>\n` +
+      `🎫 Получено билетов: <b>+${tickets}</b>\n` +
+      `🎟 Всего билетов: <b>${esc(token.raffleTickets[walletKey])}</b>\n\n` +
+      `ℹ️ 1 TON = 1 билет`,
+      {
+        parse_mode: "HTML",
+        disable_web_page_preview: true
+      }
+    );
+  }
+}
+
   await sendPost(
     "buy",
     `🏆 <b>NEW ATH!</b>\n\n` +
@@ -1376,6 +1408,7 @@ function mainMenu() {
           { text: "➖ Whitelist", callback_data: "edit:removeWhitelist" }
         ],
 
+        [{ text: "🎟 Raffle On/Off", callback_data: "toggle:raffleEnabled" }],
         [{ text: "📊 Статус бота", callback_data: "status" }]
       ]
     }
@@ -1808,6 +1841,21 @@ bot.on("callback_query", async q => {
       : "❌ Sell posts выключены"
   });
 
+  if (data === "toggle:raffleEnabled") {
+  const token = t();
+  token.raffleEnabled = !token.raffleEnabled;
+  saveDb();
+
+  await bot.answerCallbackQuery(q.id, {
+    text: token.raffleEnabled
+      ? "✅ Raffle включен"
+      : "❌ Raffle выключен"
+  });
+
+  await bot.sendMessage(chatId, "🎟 Raffle обновлен", mainMenu());
+  return;
+}
+
   await bot.sendMessage(chatId, "⚙️ Настройки обновлены", mainMenu());
   return;
 }
@@ -1897,6 +1945,99 @@ bot.onText(/^\/?ca$/i, async msg => {
   await bot.sendMessage(msg.chat.id, text, {
     parse_mode: "HTML"
   });
+});
+
+bot.onText(/^\/raffle$/i, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  const rows = Object.entries(token.raffleTickets || {})
+    .filter(([wallet, count]) => wallet && Number(count) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]));
+
+  if (!rows.length) {
+    return bot.sendMessage(msg.chat.id, "🎟 Билетов пока нет");
+  }
+
+  const totalTickets = rows.reduce((sum, [, count]) => sum + Number(count), 0);
+
+  let text =
+    `🎟 <b>Статистика Raffle</b>\n\n` +
+    `👥 Участников: <b>${rows.length}</b>\n` +
+    `🎫 Всего билетов: <b>${totalTickets}</b>\n\n`;
+
+  rows.forEach(([wallet, count], i) => {
+    text +=
+      `${i + 1}. <a href="https://tonviewer.com/${esc(wallet)}">${esc(shortAddr(wallet))}</a> — ` +
+      `<b>${esc(count)}</b> билетов\n`;
+  });
+
+  await bot.sendMessage(msg.chat.id, text, {
+    parse_mode: "HTML",
+    disable_web_page_preview: true
+  });
+});
+
+bot.onText(/^\/draw$/i, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+  const entries = Object.entries(token.raffleTickets || {})
+    .filter(([wallet, count]) => wallet && Number(count) > 0);
+
+  const pool = [];
+
+  for (const [wallet, count] of entries) {
+    for (let i = 0; i < Number(count); i++) {
+      pool.push(wallet);
+    }
+  }
+
+  if (!pool.length) {
+    return bot.sendMessage(msg.chat.id, "❌ Нет билетов для розыгрыша");
+  }
+
+  const winner = pool[Math.floor(Math.random() * pool.length)];
+  const winnerTickets = Number(token.raffleTickets[winner] || 0);
+
+  await bot.sendMessage(
+    GROUP_CHAT_ID,
+    `🎉 <b>TROCK Raffle Finished</b> 🎉\n\n` +
+    `🏆 Победитель выбран случайным образом среди всех билетов\n\n` +
+    `👤 Победитель:\n` +
+    `<a href="https://tonviewer.com/${esc(winner)}">${esc(shortAddr(winner))}</a>\n\n` +
+    `🎫 Билетов у победителя: <b>${winnerTickets}</b>\n` +
+    `🎟 Всего билетов в розыгрыше: <b>${pool.length}</b>\n` +
+    `👥 Всего участников: <b>${entries.length}</b>\n\n` +
+    `📊 <b>Как выбирался победитель:</b>\n` +
+    `• 1 TON покупки = 1 билет\n` +
+    `• Чем больше билетов — тем выше шанс на победу\n` +
+    `• Победитель выбран автоматически случайным образом среди всех билетов\n\n` +
+    `🎁 Приз будет отправлен администрацией\n` +
+    `🚀 Спасибо всем холдерам TROCK за участие`,
+    {
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    }
+  );
+});
+
+bot.onText(/^\/rreset$/i, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  token.raffleTickets = {};
+  saveDb();
+
+  await bot.sendMessage(
+    msg.chat.id,
+    `🧹 <b>Raffle сброшен</b>\n\n` +
+    `Все билеты очищены.\n` +
+    `Можно начинать новый розыгрыш.`,
+    { parse_mode: "HTML" }
+  );
 });
 
 bot.on("message", async msg => {
