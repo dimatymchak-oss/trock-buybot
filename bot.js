@@ -974,10 +974,6 @@ const nativePrice =
       : 0
   );
 
-if ((!tonAmount || tonAmount <= 0) && tokenAmount > 0 && nativePrice > 0) {
-  tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
-  tonAmount = Number(tonAmount.toFixed(6));
-}
   if (token.newAthDetected) {
   token.newAthDetected = false;
 
