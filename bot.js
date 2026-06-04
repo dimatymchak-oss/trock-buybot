@@ -2226,6 +2226,41 @@ bot.on("photo", async msg => {
   await bot.sendMessage(msg.chat.id, `✅ Фото сохранено: ${s.target}`, mainMenu());
 });
 
+bot.on("new_chat_members", async msg => {
+  try {
+    const token = t();
+
+    for (const member of msg.new_chat_members || []) {
+
+      if (member.is_bot) continue;
+
+      const user =
+        `<a href="tg://user?id=${member.id}">${esc(member.first_name)}</a>`;
+
+      const text =
+        `🚀 Добро пожаловать, ${user}!\n\n` +
+        `Рады видеть тебя в сообществе TROCK! 💎\n\n` +
+        `Полезные ссылки:\n\n` +
+        `📊 <a href="${esc(token.chartLink)}">Chart</a>\n` +
+        `🛒 <a href="${esc(token.buyLink)}">Buy</a>\n` +
+        `🖼 <a href="${esc(token.nftLink)}">NFT</a>\n` +
+        `🤖 <a href="${esc(token.botLink)}">Bot</a>\n\n` +
+        `Желаем приятного общения и успешных полётов вместе с TROCK! 🚀`;
+
+      await bot.sendMessage(
+        msg.chat.id,
+        text,
+        {
+          parse_mode: "HTML",
+          disable_web_page_preview: true
+        }
+      );
+    }
+  } catch (e) {
+    console.log("WELCOME ERROR:", e.message);
+  }
+});
+
 bot.on("polling_error", err => {
   console.log("POLLING ERROR:", err.message);
 });
