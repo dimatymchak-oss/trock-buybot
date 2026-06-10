@@ -1028,6 +1028,33 @@ const amountForTon = sentAmount || receivedAmount;
   }
 }
 
+  if (
+  tradeType === "sell" &&
+  seller &&
+  sameAddress(seller, token.jettonMaster)
+) {
+  token.burnedTotal = String(
+    Number(Number(token.burnedTotal || 0) + Number(tokenAmount || 0)).toFixed(9)
+  );
+
+  await sendPost(
+    "burn",
+    burnCaption({
+      amount: tokenAmount,
+      totalBurn: token.burnedTotal,
+      sender: seller,
+      hash: txHash,
+      lt: String(Date.now())
+    })
+  );
+
+  token.totalBurnPosts += 1;
+
+  remember(key);
+  saveDb();
+  continue;
+}
+
       if (tradeType === "buy") {
   const realTon = await getBuyerDedustTon(buyer, event.timestamp);
 
