@@ -914,6 +914,7 @@ async function checkBuys() {
       let txHash = eventId;
       let tradeType = "buy";
       let seller = "";
+      let tonTransfers = [];
 
       for (const action of actions) {
         const type = action.type || "";
@@ -922,6 +923,37 @@ async function checkBuys() {
           action.FlawedJettonTransfer ||
           action.payload ||
           {};
+
+        if (type === "TonTransfer" || action.TonTransfer) {
+  const tonPayload = action.TonTransfer || action.payload || {};
+
+  const senderTon =
+    tonPayload.sender?.address ||
+    tonPayload.sender ||
+    "";
+
+  const recipientTon =
+    tonPayload.recipient?.address ||
+    tonPayload.recipient ||
+    tonPayload.receiver?.address ||
+    tonPayload.receiver ||
+    "";
+
+  const amountRaw = tonPayload.amount || tonPayload.value || "0";
+
+  const amountTon =
+    Number(amountRaw) > 1000000
+      ? Number(amountRaw) / 1e9
+      : Number(amountRaw);
+
+  if (amountTon > 0) {
+    tonTransfers.push({
+      sender: senderTon,
+      recipient: recipientTon,
+      amount: amountTon
+    });
+  }
+}
 
         if (
           type === "JettonTransfer" ||
@@ -985,6 +1017,16 @@ const amountForTon = sentAmount || receivedAmount;
       if (!tokenAmount) continue;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
+
+      if (tradeType === "sell" && seller) {
+  const sellTonTransfer = tonTransfers
+    .filter(x => sameAddress(x.recipient, seller))
+    .sort((a, b) => Number(b.amount) - Number(a.amount))[0];
+
+  if (sellTonTransfer) {
+    tonAmount = Number(sellTonTransfer.amount.toFixed(6));
+  }
+}
 
       if (tradeType === "buy") {
   const realTon = await getBuyerDedustTon(buyer, event.timestamp);
@@ -2226,6 +2268,7 @@ bot.on("photo", async msg => {
   if (!fileId) return bot.sendMessage(msg.chat.id, "❌ Фото не найдено");
 
   if (s.target === "buy") t().buyPhotoFileId = fileId;
+  if (s.target === "sell") t().sellPhotoFileId = fileId;
   if (s.target === "burn") t().burnPhotoFileId = fileId;
   if (s.target === "reward") t().rewardPhotoFileId = fileId;
 
