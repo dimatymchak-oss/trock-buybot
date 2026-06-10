@@ -1324,6 +1324,15 @@ async function checkRewards() {
           action.payload ||
           {};
 
+       const comment = String(
+  payload.comment ||
+  payload.message ||
+  payload.text ||
+  ""
+).toLowerCase();
+
+if (!comment.includes("reward from tonrocket")) continue;
+
         if (type === "TonTransfer" || action.TonTransfer) {
           const sender =
             payload.sender?.address ||
