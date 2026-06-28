@@ -234,6 +234,26 @@ function configuredZeroAddress(token) {
   ).trim();
 }
 
+function parseTonTransferAmount(payload = {}) {
+  const raw = payload.amount ?? payload.value ?? "0";
+  const s = String(raw || "0").trim();
+  if (!s) return 0;
+
+  const n = Number(s);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+
+  if (/^\d+$/.test(s)) {
+    return n > 1000000 ? n / 1e9 : n;
+  }
+
+  if (s.includes(".") && n > 1000) {
+    return n / 1e6;
+  }
+
+  return n;
+}
+
+
 function tonviewerTx(hash) {
   if (!hash || String(hash).startsWith("test_")) return "https://tonviewer.com/";
   return `https://tonviewer.com/transaction/${hash}`;
@@ -891,10 +911,7 @@ async function checkBuys() {
         if (type === "TonTransfer" || action.TonTransfer || action.ton_transfer) {
           const tonPayload = getActionPayload(action, "TonTransfer", "ton_transfer");
           const amountRaw = tonPayload.amount || tonPayload.value || "0";
-          const amountTon =
-            Number(amountRaw) > 1000000
-              ? Number(amountRaw) / 1e9
-              : Number(amountRaw);
+          const amountTon = parseTonTransferAmount(tonPayload);
 
           if (Number.isFinite(amountTon) && amountTon > maxTonTransfer) {
             maxTonTransfer = amountTon;
@@ -1008,20 +1025,25 @@ const amountForTon = sentAmount || receivedAmount;
 });
 
 const nativePrice =
-  Number(token.priceNative || 0) ||
-  (
-    Number(token.price || 0) > 0 && Number(token.tonUsd || 0) > 0
-      ? Number(token.price) / Number(token.tonUsd)
-      : 0
-  );
+  const impliedTon =
+  tokenAmount > 0 && nativePrice > 0
+    ? Number((tokenAmount * nativePrice).toFixed(3))
+    : 0;
+
+if (
+  tradeType === "buy" &&
+  impliedTon > 0 &&
+  (!tonAmount || tonAmount <= 0 || impliedTon > Number(tonAmount) * 3)
+) {
+  tonAmount = impliedTon;
+}
 
 if (
   (!tonAmount || tonAmount <= 0) &&
   tokenAmount > 0 &&
   nativePrice > 0
 ) {
-  tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
-  tonAmount = Number(tonAmount.toFixed(3));
+  tonAmount = impliedTon;
 }
 
   if (token.newAthDetected) {
@@ -1300,10 +1322,7 @@ async function checkRewards() {
         if (expectedComment && !sameComment(comment, expectedComment)) continue;
 
         const amountRaw = payload.amount || payload.value || "0";
-        const amountTon =
-          Number(amountRaw) > 1000000
-            ? Number(amountRaw) / 1e9
-            : Number(amountRaw);
+        const amountTon = parseTonTransferAmount(payload);
 
         if (amountTon >= Number(token.minRewardTon || 0.001)) {
           totalTon += amountTon;
@@ -1589,6 +1608,19 @@ bot.onText(/\/start|\/admin/, async msg => {
       ...mainMenu()
     }
   );
+});
+
+bot.onText(/\/reset_stats/, async msg => {
+  if (!isAdmin(msg.from.id)) return;
+
+  const token = t();
+
+  token.rewardTotalTon = "0";
+  token.topBuyers = {};
+
+  saveDb();
+
+  await bot.sendMessage(msg.chat.id, "✅ Stats reset: rewards and top buyers cleared");
 });
 
 bot.onText(/\/debug/, async msg => {
