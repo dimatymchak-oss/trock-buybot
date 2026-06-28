@@ -30,28 +30,6 @@ const BOT_STARTED_AT = Math.floor(Date.now() / 1000);
 let isMonitoring = false;
 const state = {};
 
-const floodMap = new Map();
-
-const badWords = [
-  "airdrop",
-  "claim",
-  "seed phrase",
-  "mnemonic",
-  "connect wallet",
-  "free ton",
-  "bonus",
-  "giveaway",
-  "http://",
-  "https://",
-  "t.me/",
-  "telegram.me/"
-];
-
-function isSpamText(text = "") {
-  const s = String(text).toLowerCase();
-  return badWords.some(w => s.includes(w));
-}
-
 function defaultDb() {
   return {
     token: {
@@ -61,7 +39,9 @@ function defaultDb() {
       jettonMaster: "",
       dexPoolAddress: "",
       burnWallet: "",
+      zeroAddress: "",
       rewardWallet: "",
+      rewardComment: "reward from TonRocket",
 
       buyLink: "https://app.dedust.io/",
       chartLink: "https://dexscreener.com/",
@@ -94,11 +74,7 @@ function defaultDb() {
       burnedTotal: "0",
 
       processed: [],
-      lastError: "",
-
-      raffleEnabled: false,
-      raffleTickets: {},
-      antiSpamWhitelist: ["exton_swap_bot"],
+      lastError: ""
     }
   };
 }
@@ -111,9 +87,16 @@ function loadDb() {
       return init;
     }
 
+    const defaults = defaultDb();
+    const stored = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+
     return {
-      ...defaultDb(),
-      ...JSON.parse(fs.readFileSync(DATA_FILE, "utf8"))
+      ...defaults,
+      ...stored,
+      token: {
+        ...defaults.token,
+        ...(stored.token || {})
+      }
     };
   } catch (e) {
     console.log("DB ERROR:", e.message);
@@ -215,6 +198,40 @@ function normalizeAmount(raw, decimals = 9) {
   if (s.includes(".")) return Number(s) || 0;
   if (/^\d+$/.test(s)) return Number(s) / Math.pow(10, decimals);
   return Number(s) || 0;
+}
+
+function getActionPayload(action, pascalName, snakeName) {
+  return action?.[pascalName] || action?.[snakeName] || action?.payload || {};
+}
+
+function getPayloadAddress(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value.address || value.account || value.wallet_address || value.raw_form || value.user_friendly || "";
+}
+
+function getTransferComment(action, payload = {}) {
+  return String(
+    payload.comment ||
+    payload.payload ||
+    payload.text ||
+    payload.message ||
+    action?.simple_preview?.description ||
+    action?.simple_preview?.value ||
+    ""
+  ).trim();
+}
+
+function sameComment(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+function configuredZeroAddress(token) {
+  return String(
+    token.zeroAddress ||
+    token.burnWallet ||
+    "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"
+  ).trim();
 }
 
 function tonviewerTx(hash) {
@@ -675,11 +692,11 @@ function sellCaption(data) {
     `🔍 Price: <b>$${esc(token.price)}</b>\n` +
     `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n\n` +
     `👥 Holders: <b>${esc(fmt(token.holders || 0, 0))}</b>\n\n` +
-    `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
+    `🪙 Jetton Master: <code>${esc(token.jettonMaster)}</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
     `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
-    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
+    `${token.botLink ? ` | 🤖 <a href="${esc(token.botLink)}">Bot</a>` : ""}`
   );
 }
 
@@ -700,17 +717,7 @@ function buyCaption(data) {
   const emojis = buyEmojiByTon(tonAmount);
   const level = buyLevel(tonAmount);
   const newHolder = data.newHolder ? "🎖 New Holder\n" : "";
-  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-const buyers24h = {};
-
-for (const item of token.buyHistory24h || []) {
-  if (!item.wallet || Number(item.time || 0) < dayAgo) continue;
-
-  const key = String(item.wallet).toLowerCase();
-  buyers24h[key] = (Number(buyers24h[key]) || 0) + Number(item.ton || 0);
-}
-
-const topBuyers = Object.entries(buyers24h)
+  const topBuyers = Object.entries(token.topBuyers || {})
   .filter(([addr, amount]) => addr && Number(amount) > 0)
   .sort((a, b) => Number(b[1]) - Number(a[1]))
   .slice(0, 3);
@@ -718,7 +725,7 @@ const topBuyers = Object.entries(buyers24h)
 let topText = "";
 
 if (topBuyers.length) {
-  topText = "\n🐋 <b>Top Buyers 24h</b>\n";
+  topText = "\n🐋 <b>Top Buyers</b>\n";
 
   topBuyers.forEach(([addr, amount], i) => {
     topText += `${i + 1}. <code>${esc(shortAddr(addr))}</code> — <b>${esc(fmt(amount, 2))} TON</b>\n`;
@@ -739,11 +746,11 @@ if (topBuyers.length) {
     `🌊 MarketCap: <b>$${esc(fmt(token.marketCap, 0))}</b>\n` +
     `👥 Holders: <b>${esc(fmt(token.holders || 0, 0))}</b>\n` +
     `${topText}` +
-    `🪙 Jetton Master: <code>EQAUf_g-uQMCqJYwy9xGUVwrMmK20UsUJXVT3xjE67179QVw</code>\n\n` +
+    `🪙 Jetton Master: <code>${esc(token.jettonMaster)}</code>\n\n` +
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
     `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
-    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
+    `${token.botLink ? ` | 🤖 <a href="${esc(token.botLink)}">Bot</a>` : ""}`
   );
 }
 
@@ -758,7 +765,7 @@ function burnCaption(data) {
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
     `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
-    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
+    `${token.botLink ? ` | 🤖 <a href="${esc(token.botLink)}">Bot</a>` : ""}`
   );
 }
 
@@ -774,7 +781,7 @@ function rewardCaption(data) {
     `🖼 <a href="${esc(token.nftLink)}">NFT Collection</a> | ` +
     `📊 <a href="${esc(token.chartLink)}">Chart</a> | ` +
     `🛒 <a href="${esc(token.buyLink)}">Buy</a>` +
-    `🤖 <a href="${esc(token.botLink)}">Bot</a>`
+    `${token.botLink ? ` | 🤖 <a href="${esc(token.botLink)}">Bot</a>` : ""}`
   );
 }
 
@@ -813,49 +820,6 @@ if (type === "buy") {
 
   if (photo) return bot.sendPhoto(GROUP_CHAT_ID, photo, { caption, ...opt });
   return bot.sendMessage(GROUP_CHAT_ID, caption, opt);
-}
-
-async function getBuyerDedustTon(buyer, timestamp) {
-  if (!buyer) return 0;
-
-  try {
-    const headers = {};
-    if (TONAPI_KEY) headers.Authorization = `Bearer ${TONAPI_KEY}`;
-
-    const res = await axios.get(
-      `https://tonapi.io/v2/accounts/${encodeURIComponent(buyer)}/events`,
-      {
-        params: { limit: 10 },
-        headers,
-        timeout: 20000
-      }
-    );
-
-    const events = res.data?.events || [];
-
-    for (const ev of events) {
-      if (timestamp && Math.abs(Number(ev.timestamp || 0) - Number(timestamp)) > 120) {
-        continue;
-      }
-
-      for (const action of ev.actions || []) {
-        const exec = action.SmartContractExec || {};
-        const operation = String(exec.operation || "").toLowerCase();
-
-        if (!operation.includes("dedustswap")) continue;
-
-        const attachedTon = Number(exec.ton_attached || 0) / 1e9;
-
-        if (attachedTon > 0.25) {
-          return Number((attachedTon - 0.25).toFixed(6));
-        }
-      }
-    }
-  } catch (e) {
-    console.log("BUYER DEDUST TON ERROR:", e.response?.status || "", e.message);
-  }
-
-  return 0;
 }
 
 async function checkBuys() {
@@ -910,11 +874,11 @@ async function checkBuys() {
       let tokenAmount = 0;
       let tonCalcAmount = 0;
       let tonAmount = 0;
+      let maxTonTransfer = 0;
       let buyer = "";
       let txHash = eventId;
       let tradeType = "buy";
       let seller = "";
-      let tonTransfers = [];
 
       for (const action of actions) {
         const type = action.type || "";
@@ -924,34 +888,30 @@ async function checkBuys() {
           action.payload ||
           {};
 
-        if (type === "TonTransfer" || action.TonTransfer) {
-  const tonPayload = action.TonTransfer || action.payload || {};
+        if (type === "TonTransfer" || action.TonTransfer || action.ton_transfer) {
+          const tonPayload = getActionPayload(action, "TonTransfer", "ton_transfer");
+          const amountRaw = tonPayload.amount || tonPayload.value || "0";
+          const amountTon =
+            Number(amountRaw) > 1000000
+              ? Number(amountRaw) / 1e9
+              : Number(amountRaw);
 
-  const senderTon =
-    tonPayload.sender?.address ||
-    tonPayload.sender ||
-    "";
+          if (Number.isFinite(amountTon) && amountTon > maxTonTransfer) {
+            maxTonTransfer = amountTon;
+          }
+        }
 
-  const recipientTon =
-    tonPayload.recipient?.address ||
-    tonPayload.recipient ||
-    tonPayload.receiver?.address ||
-    tonPayload.receiver ||
-    "";
+        if (type === "SmartContractExec" || action.SmartContractExec) {
+  const exec = action.SmartContractExec || {};
+  const operation = String(exec.operation || "");
 
-  const amountRaw = tonPayload.amount || tonPayload.value || "0";
+  if (operation === "DedustSwap") {
+    const attachedTon = Number(exec.ton_attached || 0) / 1e9;
+    const realTon = attachedTon - 0.25;
 
-  const amountTon =
-    Number(amountRaw) > 1000000
-      ? Number(amountRaw) / 1e9
-      : Number(amountRaw);
-
-  if (amountTon > 0) {
-    tonTransfers.push({
-      sender: senderTon,
-      recipient: recipientTon,
-      amount: amountTon
-    });
+    if (realTon > 0) {
+      tonAmount = Number(realTon.toFixed(3));
+    }
   }
 }
 
@@ -1001,7 +961,7 @@ const amountForTon = sentAmount || receivedAmount;
           if (amount > 0) {
             tokenAmount = amount;
             tonCalcAmount = amountForTon;
-      
+
             if (sameAddress(recipient, token.dexPoolAddress)) {
               tradeType = "sell";
               seller = sender;
@@ -1018,68 +978,26 @@ const amountForTon = sentAmount || receivedAmount;
       if (token.burnWallet && sameAddress(buyer, token.burnWallet)) continue;
       if (tokenAmount < Number(token.minBuyTokens || 1)) continue;
 
-      if (tradeType === "sell" && seller) {
-  const sellTonTransfer = tonTransfers
-    .filter(x => sameAddress(x.recipient, seller))
-    .sort((a, b) => Number(b.amount) - Number(a.amount))[0];
-
-  if (sellTonTransfer) {
-    tonAmount = Number(sellTonTransfer.amount.toFixed(6));
-  }
-}
-
-  if (
-  tradeType === "sell" &&
-  seller &&
-  sameAddress(seller, token.jettonMaster)
-) {
-  token.burnedTotal = String(
-    Number(Number(token.burnedTotal || 0) + Number(tokenAmount || 0)).toFixed(9)
-  );
-
-  await sendPost(
-    "burn",
-    burnCaption({
-      amount: tokenAmount,
-      totalBurn: token.burnedTotal,
-      sender: seller,
-      hash: txHash,
-      lt: String(Date.now())
-    })
-  );
-
-  token.totalBurnPosts += 1;
-
-  remember(key);
-  saveDb();
-  continue;
-}
-
-      if (tradeType === "buy") {
-  const realTon = await getBuyerDedustTon(buyer, event.timestamp);
-
-  if (realTon > 0) {
-    tonAmount = realTon;
-  }
-}
-
-if (tradeType === "buy" && (!tonAmount || tonAmount <= 0)) {
-  console.log("BUY SKIPPED: TON amount not found", {
-    buyer,
-    eventId,
-    tokenAmount
-  });
-
-  remember(key);
-  saveDb();
-  continue;
-}
-
       if (tradeType === "sell" && token.sellEnabled === false) {
         remember(key);
         saveDb();
         continue;
       }
+
+   if (tradeType === "buy" && Number(event.extra || 0) < 0) {
+  const extraTon = Math.abs(Number(event.extra)) / 1e9;
+  const dedustService = 0.047988674;
+
+  const realTon = extraTon - dedustService;
+
+  if (realTon > 0) {
+    tonAmount = Number(realTon.toFixed(3));
+  }
+}
+
+   if (tradeType === "buy" && maxTonTransfer > Number(tonAmount || 0)) {
+  tonAmount = Number(maxTonTransfer.toFixed(3));
+}
 
    console.log("BUY DEBUG:", {
   tokenAmount,
@@ -1097,6 +1015,15 @@ const nativePrice =
       : 0
   );
 
+if (
+  (!tonAmount || tonAmount <= 0) &&
+  tokenAmount > 0 &&
+  nativePrice > 0
+) {
+  tonAmount = (tonCalcAmount || tokenAmount) * nativePrice;
+  tonAmount = Number(tonAmount.toFixed(3));
+}
+
   if (token.newAthDetected) {
   token.newAthDetected = false;
 
@@ -1108,49 +1035,14 @@ const nativePrice =
   );
 }
 
-  if (token.raffleEnabled && tradeType === "buy") {
-  const tickets = Math.floor(Number(tonAmount || 0));
-
-  if (tickets > 0) {
-    if (!token.raffleTickets) token.raffleTickets = {};
-
-    const walletKey = String(buyer || "").toLowerCase();
-
-    token.raffleTickets[walletKey] =
-      (Number(token.raffleTickets[walletKey]) || 0) + tickets;
-
-    saveDb();
-
-    await bot.sendMessage(
-  GROUP_CHAT_ID,
-  `🎟 <b>TROCK Raffle Ticket</b>\n\n` +
-  `👤 Кошелёк: <a href="https://tonviewer.com/${esc(buyer)}">${esc(shortAddr(buyer))}</a>\n` +
-  `💰 Покупка: <b>${esc(fmt(tonAmount, 2))} TON</b>\n` +
-  `🎫 Получено билетов: <b>+${tickets}</b>\n` +
-  `🎟 Всего билетов: <b>${esc(token.raffleTickets[walletKey])}</b>\n\n` +
-  `ℹ️ 1 TON = 1 билет`,
-  {
-    parse_mode: "HTML",
-    disable_web_page_preview: true
-  }
-);
-  }
-}
-
   if (tradeType === "buy") {
-  if (!Array.isArray(token.buyHistory24h)) token.buyHistory24h = [];
+  if (!token.topBuyers) token.topBuyers = {};
 
-  token.buyHistory24h.push({
-    wallet: buyer,
-    ton: Number(tonAmount || 0),
-    time: Date.now()
-  });
+  const buyerKey = String(buyer || "").toLowerCase();
 
-  const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-
-  token.buyHistory24h = token.buyHistory24h.filter(x =>
-    x && Number(x.time || 0) >= dayAgo
-  );
+  token.topBuyers[buyerKey] =
+    (Number(token.topBuyers[buyerKey]) || 0) +
+    Number(tonAmount || 0);
 }
 
       await sendPost(
@@ -1285,7 +1177,7 @@ async function checkBurns() {
             payload.receiver?.address ||
             payload.receiver ||
             "";
- 
+
            const jettonAddress =
   payload.jetton?.address ||
   payload.jetton?.master ||
@@ -1364,15 +1256,17 @@ async function checkRewards() {
     const events = res.data?.events || [];
 
     if (!token.rewardInitialized) {
-  for (const event of events) {
-    const eventId = event.event_id || event.id || event.hash || "";
-    if (eventId) remember(`reward_event_${eventId}`);
-  }
+      for (const event of events) {
+        const eventId = event.event_id || event.id || event.hash || "";
+        if (eventId) remember(`reward_event_${eventId}`);
+      }
 
-  token.rewardInitialized = true;
-  saveDb();
-  return;
-}
+      token.rewardInitialized = true;
+      saveDb();
+      return;
+    }
+
+    const expectedComment = String(token.rewardComment || "reward from TonRocket").trim();
 
     for (const event of events.reverse()) {
       const eventId = event.event_id || event.id || event.hash || "";
@@ -1381,6 +1275,12 @@ async function checkRewards() {
       const key = `reward_event_${eventId}`;
       if (hasProcessed(key)) continue;
 
+      if (event.timestamp && event.timestamp < BOT_STARTED_AT - 30) {
+        remember(key);
+        saveDb();
+        continue;
+      }
+
       const actions = event.actions || [];
 
       let totalTon = 0;
@@ -1388,42 +1288,34 @@ async function checkRewards() {
 
       for (const action of actions) {
         const type = action.type || "";
-        const payload =
-          action.TonTransfer ||
-          action.payload ||
-          {};
+        const payload = getActionPayload(action, "TonTransfer", "ton_transfer");
 
-       const comment = String(
-  payload.comment ||
-  payload.message ||
-  payload.text ||
-  ""
-).toLowerCase();
+        if (type !== "TonTransfer" && !action.TonTransfer && !action.ton_transfer) continue;
+        if (String(action.status || "").toLowerCase() === "failed") continue;
 
-if (!comment.includes("reward from tonrocket")) continue;
+        const sender = getPayloadAddress(payload.sender);
+        if (!sameAddress(sender, token.rewardWallet)) continue;
 
-        if (type === "TonTransfer" || action.TonTransfer) {
-          const sender =
-            payload.sender?.address ||
-            payload.sender ||
-            "";
+        const comment = getTransferComment(action, payload);
+        if (expectedComment && !sameComment(comment, expectedComment)) continue;
 
-          if (sender && !sameAddress(sender, token.rewardWallet)) continue;
+        const amountRaw = payload.amount || payload.value || "0";
+        const amountTon =
+          Number(amountRaw) > 1000000
+            ? Number(amountRaw) / 1e9
+            : Number(amountRaw);
 
-          const amountRaw = payload.amount || payload.value || "0";
-          const amountTon =
-            Number(amountRaw) > 1000000
-              ? Number(amountRaw) / 1e9
-              : Number(amountRaw);
-
-          if (amountTon >= Number(token.minRewardTon || 0.001)) {
-            totalTon += amountTon;
-            receivers += 1;
-          }
+        if (amountTon >= Number(token.minRewardTon || 0.001)) {
+          totalTon += amountTon;
+          receivers += 1;
         }
       }
 
-      if (!totalTon || !receivers) continue;
+      if (!totalTon || !receivers) {
+        remember(key);
+        saveDb();
+        continue;
+      }
 
       token.rewardTotalTon = String(
         Number(Number(token.rewardTotalTon || 0) + totalTon).toFixed(9)
@@ -1452,6 +1344,64 @@ if (!comment.includes("reward from tonrocket")) continue;
   }
 }
 
+async function refreshBurnedTotalFromZeroAddress() {
+  const token = t();
+  if (!token.jettonMaster) return;
+
+  const zeroAddress = configuredZeroAddress(token);
+  if (!zeroAddress) return;
+
+  try {
+    const headers = TONAPI_KEY ? { Authorization: `Bearer ${TONAPI_KEY}` } : {};
+
+    let offset = 0;
+    const limit = 1000;
+
+    while (true) {
+      const res = await axios.get(
+        `https://tonapi.io/v2/jettons/${encodeURIComponent(token.jettonMaster)}/holders`,
+        {
+          params: { limit, offset },
+          headers,
+          timeout: 20000
+        }
+      );
+
+      const holders = res.data?.addresses || res.data?.holders || [];
+
+      for (const h of holders) {
+        const holder =
+          getPayloadAddress(h.owner) ||
+          getPayloadAddress(h.wallet?.owner) ||
+          getPayloadAddress(h.address) ||
+          getPayloadAddress(h);
+
+        const name = String(h.owner?.name || h.name || "");
+        const isZero = sameAddress(holder, zeroAddress) || name.toLowerCase().includes("zero");
+
+        if (!isZero) continue;
+
+        const raw = h.balance || h.amount || h.jetton_balance || "0";
+        const decimals = Number(h.jetton?.decimals || 9);
+        const total = normalizeAmount(raw, decimals);
+
+        token.burnedTotal = String(total.toFixed(9));
+        token.lastBurnRefreshAt = Date.now();
+        saveDb();
+        return;
+      }
+
+      if (holders.length < limit) break;
+      offset += limit;
+      await sleep(300);
+    }
+  } catch (e) {
+    console.log("ZERO BALANCE ERROR:", e.response?.status || "", e.message);
+    token.lastError = `ZERO: ${e.response?.status || ""} ${e.message}`;
+    saveDb();
+  }
+}
+
 async function monitorLoop() {
   if (isMonitoring) return;
   isMonitoring = true;
@@ -1462,6 +1412,10 @@ async function monitorLoop() {
     await refreshMarketData();
     await refreshTonPrice();
     await refreshHolders();
+
+    if (Date.now() - Number(t().lastBurnRefreshAt || 0) > 5 * 60 * 1000) {
+      await refreshBurnedTotalFromZeroAddress();
+    }
 
     await checkBuys();
     await checkBurns();
@@ -1490,6 +1444,10 @@ function mainMenu() {
           { text: "🔥 Burn Wallet", callback_data: "edit:burnWallet" },
           { text: "💸 Reward Wallet", callback_data: "edit:rewardWallet" }
         ],
+        [
+          { text: "Zero Address", callback_data: "edit:zeroAddress" },
+          { text: "Reward Comment", callback_data: "edit:rewardComment" }
+        ],
 
         [{ text: "🔗 Ссылки", callback_data: "noop" }],
         [
@@ -1504,7 +1462,6 @@ function mainMenu() {
           { text: "🦎 Gecko", callback_data: "edit:geckoLink" },
           { text: "🛠 DEXTools", callback_data: "edit:dexToolsLink" }
         ],
-        
 
         [{ text: "🖼 Медиа", callback_data: "noop" }],
         [
@@ -1525,13 +1482,6 @@ function mainMenu() {
 
         [{ text: "🔴 Sell Posts On/Off", callback_data: "toggle:sellEnabled" }],
         [{ text: "🔄 Проверить сейчас", callback_data: "force_check" }],
-
-        [
-          { text: "➕ Whitelist", callback_data: "edit:addWhitelist" },
-          { text: "➖ Whitelist", callback_data: "edit:removeWhitelist" }
-        ],
-
-        [{ text: "🎟 Raffle On/Off", callback_data: "toggle:raffleEnabled" }],
         [{ text: "📊 Статус бота", callback_data: "status" }]
       ]
     }
@@ -1548,11 +1498,12 @@ function statusText() {
     `DEX pool: <code>${esc(shortAddr(token.dexPoolAddress))}</code>\n` +
     `Burn: <code>${esc(shortAddr(token.burnWallet))}</code>\n` +
     `Reward: <code>${esc(shortAddr(token.rewardWallet))}</code>\n` +
+    `Zero: <code>${esc(shortAddr(configuredZeroAddress(token)))}</code>\n` +
+    `Reward comment: <code>${esc(token.rewardComment || "reward from TonRocket")}</code>\n` +
     `NFT: ${token.nftLink ? "✅" : "❌"}\n\n` +
     `🛒 Buy posts: <b>${token.totalBuyPosts}</b>\n` +
     `🔥 Burn posts: <b>${token.totalBurnPosts}</b>\n` +
     `💸 Reward posts: <b>${token.totalRewardPosts}</b>\n\n` +
-    `🎟 Raffle: <b>${token.raffleEnabled ? "ON" : "OFF"}</b>\n` +
     `🧠 Error: <code>${esc(token.lastError || "-")}</code>`
   );
 }
@@ -1829,7 +1780,7 @@ bot.onText(/\/recount_burn/, async msg => {
 
       const isZero =
         String(name).toLowerCase().includes("zero") ||
-        sameAddress(holder, "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c");
+        sameAddress(holder, configuredZeroAddress(token));
 
       if (!isZero) continue;
 
@@ -1954,21 +1905,6 @@ bot.on("callback_query", async q => {
   return;
 }
 
-   if (data === "toggle:raffleEnabled") {
-  const token = t();
-  token.raffleEnabled = !token.raffleEnabled;
-  saveDb();
-
-  await bot.answerCallbackQuery(q.id, {
-    text: token.raffleEnabled
-      ? "✅ Raffle включен"
-      : "❌ Raffle выключен"
-  });
-
-  await bot.sendMessage(chatId, "🎟 Raffle обновлен", mainMenu());
-  return;
-}
-
   if (data === "toggle:sellEnabled") {
   const token = t();
   token.sellEnabled = !token.sellEnabled;
@@ -1979,9 +1915,6 @@ bot.on("callback_query", async q => {
       ? "✅ Sell posts включены"
       : "❌ Sell posts выключены"
   });
-
-  await bot.sendMessage(chatId, "🔴 Sell posts обновлены", mainMenu());
-return;
 
   await bot.sendMessage(chatId, "⚙️ Настройки обновлены", mainMenu());
   return;
@@ -2074,149 +2007,6 @@ bot.onText(/^\/?ca$/i, async msg => {
   });
 });
 
-bot.onText(/^\/raffle$/i, async msg => {
-  if (!isAdmin(msg.from.id)) return;
-
-  const token = t();
-
-  const rows = Object.entries(token.raffleTickets || {})
-    .filter(([wallet, count]) => wallet && Number(count) > 0)
-    .sort((a, b) => Number(b[1]) - Number(a[1]));
-
-  if (!rows.length) {
-    return bot.sendMessage(msg.chat.id, "🎟 Билетов пока нет");
-  }
-
-  const totalTickets = rows.reduce((sum, [, count]) => sum + Number(count), 0);
-
-  let text =
-    `🎟 <b>Статистика Raffle</b>\n\n` +
-    `👥 Участников: <b>${rows.length}</b>\n` +
-    `🎫 Всего билетов: <b>${totalTickets}</b>\n\n`;
-
-  rows.forEach(([wallet, count], i) => {
-    text +=
-      `${i + 1}. <a href="https://tonviewer.com/${esc(wallet)}">${esc(shortAddr(wallet))}</a> — ` +
-      `<b>${esc(count)}</b> билетов\n`;
-  });
-
-  await bot.sendMessage(msg.chat.id, text, {
-    parse_mode: "HTML",
-    disable_web_page_preview: true
-  });
-});
-
-bot.onText(/^\/draw$/i, async msg => {
-  if (!isAdmin(msg.from.id)) return;
-
-  const token = t();
-  const entries = Object.entries(token.raffleTickets || {})
-    .filter(([wallet, count]) => wallet && Number(count) > 0);
-
-  const pool = [];
-
-  for (const [wallet, count] of entries) {
-    for (let i = 0; i < Number(count); i++) {
-      pool.push(wallet);
-    }
-  }
-
-  if (!pool.length) {
-    return bot.sendMessage(msg.chat.id, "❌ Нет билетов для розыгрыша");
-  }
-
-  const winner = pool[Math.floor(Math.random() * pool.length)];
-  const winnerTickets = Number(token.raffleTickets[winner] || 0);
-
-  await bot.sendMessage(
-    GROUP_CHAT_ID,
-    `🎉 <b>TROCK Raffle Finished</b> 🎉\n\n` +
-    `🏆 Победитель выбран случайным образом среди всех билетов\n\n` +
-    `👤 Победитель:\n` +
-    `<a href="https://tonviewer.com/${esc(winner)}">${esc(shortAddr(winner))}</a>\n\n` +
-    `🎫 Билетов у победителя: <b>${winnerTickets}</b>\n` +
-    `🎟 Всего билетов в розыгрыше: <b>${pool.length}</b>\n` +
-    `👥 Всего участников: <b>${entries.length}</b>\n\n` +
-    `📊 <b>Как выбирался победитель:</b>\n` +
-    `• 1 TON покупки = 1 билет\n` +
-    `• Чем больше билетов — тем выше шанс на победу\n` +
-    `• Победитель выбран автоматически случайным образом среди всех билетов\n\n` +
-    `🎁 Приз будет отправлен администрацией\n` +
-    `🚀 Спасибо всем холдерам TROCK за участие`,
-    {
-      parse_mode: "HTML",
-      disable_web_page_preview: true
-    }
-  );
-});
-
-bot.onText(/^\/rreset$/i, async msg => {
-  if (!isAdmin(msg.from.id)) return;
-
-  const token = t();
-
-  token.raffleTickets = {};
-  saveDb();
-
-  await bot.sendMessage(
-    msg.chat.id,
-    `🧹 <b>Raffle сброшен</b>\n\n` +
-    `Все билеты очищены.\n` +
-    `Можно начинать новый розыгрыш.`,
-    { parse_mode: "HTML" }
-  );
-});
-
-bot.on("message", async msg => {
-  try {
-    if (!msg.chat || msg.chat.type === "private") return;
-    if (isAdmin(msg.from?.id)) return;
-
-    const username = String(msg.from?.username || "").toLowerCase();
-    const userId = String(msg.from?.id || "");
-
-    const whitelist = (t().antiSpamWhitelist || [])
-      .map(x => String(x).replace("@", "").toLowerCase());
-
-    if (whitelist.includes(username) || whitelist.includes(userId)) return;
-
-    const text = msg.text || msg.caption || "";
-
-    if (isSpamText(text)) {
-      await bot.deleteMessage(msg.chat.id, msg.message_id);
-      return;
-    }
-
-    const key = `${msg.chat.id}:${msg.from.id}`;
-    const now = Date.now();
-
-    const arr = floodMap.get(key) || [];
-    const recent = arr.filter(t => now - t < 10000);
-    recent.push(now);
-    floodMap.set(key, recent);
-
-    if (recent.length >= 5) {
-      await bot.deleteMessage(msg.chat.id, msg.message_id);
-
-      await bot.restrictChatMember(msg.chat.id, msg.from.id, {
-        permissions: {
-          can_send_messages: false
-        },
-        until_date: Math.floor(Date.now() / 1000) + 300
-      });
-
-      await bot.sendMessage(
-        msg.chat.id,
-        `🔇 ${esc(msg.from.first_name || "User")} muted за флуд на 5 минут`
-      );
-
-      return;
-    }
-  } catch (e) {
-    console.log("ANTISPAM ERROR:", e.message);
-  }
-});
-
 bot.on("message", async msg => {
   if (!isAdmin(msg.from?.id)) return;
   if (!msg.text || msg.text.startsWith("/")) return;
@@ -2231,44 +2021,13 @@ bot.on("message", async msg => {
     "jettonMaster",
     "dexPoolAddress",
     "burnWallet",
-    "rewardWallet"
+    "rewardWallet",
+    "zeroAddress"
   ];
 
   if (addressFields.includes(s.field)) {
     value = normalizeAddress(value);
   }
-
-  if (s.field === "addWhitelist") {
-  const item = value.replace("@", "").toLowerCase();
-
-  if (!t().antiSpamWhitelist) t().antiSpamWhitelist = [];
-  if (!t().antiSpamWhitelist.includes(item)) {
-    t().antiSpamWhitelist.push(item);
-  }
-
-  saveDb();
-  delete state[msg.from.id];
-
-  return bot.sendMessage(msg.chat.id, `✅ Добавлено в whitelist: ${esc(item)}`, {
-    parse_mode: "HTML",
-    ...mainMenu()
-  });
-}
-
-if (s.field === "removeWhitelist") {
-  const item = value.replace("@", "").toLowerCase();
-
-  t().antiSpamWhitelist = (t().antiSpamWhitelist || [])
-    .filter(x => x !== item);
-
-  saveDb();
-  delete state[msg.from.id];
-
-  return bot.sendMessage(msg.chat.id, `✅ Удалено из whitelist: ${esc(item)}`, {
-    parse_mode: "HTML",
-    ...mainMenu()
-  });
-}
 
   t()[s.field] = value;
   saveDb();
@@ -2295,7 +2054,6 @@ bot.on("photo", async msg => {
   if (!fileId) return bot.sendMessage(msg.chat.id, "❌ Фото не найдено");
 
   if (s.target === "buy") t().buyPhotoFileId = fileId;
-  if (s.target === "sell") t().sellPhotoFileId = fileId;
   if (s.target === "burn") t().burnPhotoFileId = fileId;
   if (s.target === "reward") t().rewardPhotoFileId = fileId;
 
@@ -2303,41 +2061,6 @@ bot.on("photo", async msg => {
   delete state[msg.from.id];
 
   await bot.sendMessage(msg.chat.id, `✅ Фото сохранено: ${s.target}`, mainMenu());
-});
-
-bot.on("new_chat_members", async msg => {
-  try {
-    const token = t();
-
-    for (const member of msg.new_chat_members || []) {
-
-      if (member.is_bot) continue;
-
-      const user =
-        `<a href="tg://user?id=${member.id}">${esc(member.first_name)}</a>`;
-
-      const text =
-        `🚀 Добро пожаловать, ${user}!\n\n` +
-        `Рады видеть тебя в сообществе TROCK! 💎\n\n` +
-        `Полезные ссылки:\n\n` +
-        `📊 <a href="${esc(token.chartLink)}">Chart</a>\n` +
-        `🛒 <a href="${esc(token.buyLink)}">Buy</a>\n` +
-        `🖼 <a href="${esc(token.nftLink)}">NFT</a>\n` +
-        `🤖 <a href="${esc(token.botLink)}">Bot</a>\n\n` +
-        `Желаем приятного общения и успешных полётов вместе с TROCK! 🚀`;
-
-      await bot.sendMessage(
-        msg.chat.id,
-        text,
-        {
-          parse_mode: "HTML",
-          disable_web_page_preview: true
-        }
-      );
-    }
-  } catch (e) {
-    console.log("WELCOME ERROR:", e.message);
-  }
 });
 
 bot.on("polling_error", err => {
