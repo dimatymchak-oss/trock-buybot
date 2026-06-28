@@ -1025,7 +1025,14 @@ const amountForTon = sentAmount || receivedAmount;
 });
 
 const nativePrice =
-  const impliedTon =
+  Number(token.priceNative || 0) ||
+  (
+    Number(token.price || 0) > 0 && Number(token.tonUsd || 0) > 0
+      ? Number(token.price) / Number(token.tonUsd)
+      : 0
+  );
+
+const impliedTon =
   tokenAmount > 0 && nativePrice > 0
     ? Number((tokenAmount * nativePrice).toFixed(3))
     : 0;
